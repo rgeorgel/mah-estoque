@@ -75,6 +75,7 @@
                             <th>Data</th>
                             <th>Produto</th>
                             <th>SKU</th>
+                            <th>Tamanho</th>
                             <th>Quantidade</th>
                             <th>Valor Unit.</th>
                             <th>Total</th>
@@ -156,7 +157,7 @@
                 products = await request('/products');
                 const select = document.getElementById('productSelect');
                 select.innerHTML = '<option value="">Selecione um produto</option>' +
-                    products.map(p => `<option value="${p.id}" data-stock="${p.quantity}">${p.name} (${p.sku}) - Estoque: ${p.quantity}</option>`).join('');
+                    products.map(p => `<option value="${p.id}" data-stock="${p.quantity}">${p.name} (${p.sku})${p.size ? ' - Tam: ' + p.size : ''} - Estoque: ${p.quantity}</option>`).join('');
             } catch (error) {
                 showToast(error.message, 'error');
             }
@@ -181,6 +182,7 @@
                         <td>${formatDate(s.createdAt)}</td>
                         <td>${s.productName}</td>
                         <td>${s.productSKU}</td>
+                        <td>${s.productSize || '-'}</td>
                         <td>${s.quantity}</td>
                         <td>${formatCurrency(s.unitValue)}</td>
                         <td>${formatCurrency(s.totalValue)}</td>

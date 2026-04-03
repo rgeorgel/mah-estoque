@@ -24,6 +24,9 @@ public class CreateProductRequest
 
     [MaxLength(100)]
     public string? Supplier { get; set; }
+
+    [MaxLength(50)]
+    public string? Size { get; set; }
 }
 
 public class UpdateProductRequest
@@ -45,6 +48,9 @@ public class UpdateProductRequest
 
     [MaxLength(100)]
     public string? Supplier { get; set; }
+
+    [MaxLength(50)]
+    public string? Size { get; set; }
 }
 
 public class ProductDto
@@ -57,6 +63,7 @@ public class ProductDto
     public int MinStock { get; set; }
     public string? Category { get; set; }
     public string? Supplier { get; set; }
+    public string? Size { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -68,6 +75,7 @@ public class ProductListItemDto
     public string Name { get; set; } = string.Empty;
     public string? Category { get; set; }
     public string? Supplier { get; set; }
+    public string? Size { get; set; }
     public decimal AcquiredValue { get; set; }
     public int Quantity { get; set; }
     public int MinStock { get; set; }

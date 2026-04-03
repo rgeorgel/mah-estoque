@@ -84,6 +84,7 @@
                                     <th>Data</th>
                                     <th>Produto</th>
                                     <th>SKU</th>
+                                    <th>Tamanho</th>
                                     <th>Quantidade</th>
                                     <th>Valor Unit.</th>
                                     <th>Total</th>
@@ -114,6 +115,7 @@
                                 <tr>
                                     <th>SKU</th>
                                     <th>Produto</th>
+                                    <th>Tamanho</th>
                                     <th>Qtd Vendida</th>
                                     <th>Receita</th>
                                     <th>Custo</th>
@@ -150,6 +152,16 @@
                 </div>
 
                 <div class="card">
+                    <h2 class="card-title">Estoque por Tamanho</h2>
+                    <div class="chart-container">
+                        <canvas id="sizeChart"></canvas>
+                    </div>
+                    <div id="emptySizeChart" class="empty-state hidden">
+                        <p>Nenhum produto com tamanho definido</p>
+                    </div>
+                </div>
+
+                <div class="card">
                     <h2 class="card-title">Detalhamento do Estoque</h2>
                     <div class="table-container">
                         <table>
@@ -158,6 +170,7 @@
                                     <th>SKU</th>
                                     <th>Produto</th>
                                     <th>Categoria</th>
+                                    <th>Tamanho</th>
                                     <th>Quantidade</th>
                                     <th>Valor Unit.</th>
                                     <th>Valor Total</th>
@@ -191,6 +204,7 @@
 
         let salesChart = null;
         let categoryChart = null;
+        let sizeChart = null;
 
         if (!checkAuth()) {
             throw new Error('Auth required');
@@ -259,6 +273,7 @@
                         <td>${formatDate(t.createdAt)}</td>
                         <td>${t.productName}</td>
                         <td>${t.productSKU}</td>
+                        <td>${t.productSize || '-'}</td>
                         <td>${t.quantity}</td>
                         <td>${formatCurrency(t.unitValue)}</td>
                         <td>${formatCurrency(t.totalValue)}</td>
@@ -322,6 +337,7 @@
                     <tr>
                         <td>${p.sku}</td>
                         <td>${p.name}</td>
+                        <td>${p.size || '-'}</td>
                         <td>${p.totalSold}</td>
                         <td>${formatCurrency(p.totalRevenue)}</td>
                         <td>${formatCurrency(p.totalCost)}</td>
@@ -351,6 +367,7 @@
                         <td>${p.sku}</td>
                         <td>${p.name}</td>
                         <td>${p.category || '-'}</td>
+                        <td>${p.size || '-'}</td>
                         <td>${p.quantity}</td>
                         <td>${formatCurrency(p.acquiredValue)}</td>
                         <td>${formatCurrency(p.totalValue)}</td>
@@ -358,7 +375,44 @@
                 `).join('');
             }
 
-            loadCategoryChart();
+            await Promise.all([loadCategoryChart(), loadSizeChart()]);
+        }
+
+        async function loadSizeChart() {
+            const data = await request('/reports/stock-by-size');
+            const emptyState = document.getElementById('emptySizeChart');
+            const realData = data.filter(d => d.size !== 'Sem tamanho');
+
+            if (realData.length === 0) {
+                emptyState.classList.remove('hidden');
+                if (sizeChart) { sizeChart.destroy(); sizeChart = null; }
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            const ctx = document.getElementById('sizeChart').getContext('2d');
+            if (sizeChart) { sizeChart.destroy(); sizeChart = null; }
+
+            const colors = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+
+            sizeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: realData.map(d => d.size),
+                    datasets: [{
+                        label: 'Quantidade em Estoque',
+                        data: realData.map(d => d.count),
+                        backgroundColor: colors.slice(0, realData.length),
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
         }
 
         async function loadCategoryChart() {

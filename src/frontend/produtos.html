@@ -52,6 +52,7 @@
                         <tr>
                             <th>SKU</th>
                             <th>Nome</th>
+                            <th>Tamanho</th>
                             <th>Categoria</th>
                             <th>Fornecedor</th>
                             <th>Valor Custo</th>
@@ -83,6 +84,10 @@
                 <div class="form-group">
                     <label for="name">Nome</label>
                     <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="size">Tamanho (opcional)</label>
+                    <input type="text" id="size" placeholder="Ex: P, M, G, GG, 38, 40...">
                 </div>
                 <div class="form-group">
                     <label for="category">Categoria (opcional)</label>
@@ -171,6 +176,7 @@
                 <tr>
                     <td>${p.sku}</td>
                     <td>${p.name}</td>
+                    <td>${p.size || '-'}</td>
                     <td>${p.category || '-'}</td>
                     <td>${p.supplier || '-'}</td>
                     <td>${formatCurrency(p.acquiredValue)}</td>
@@ -214,6 +220,7 @@
             document.getElementById('productId').value = product ? product.id : '';
             document.getElementById('sku').value = product ? product.sku : '';
             document.getElementById('name').value = product ? product.name : '';
+            document.getElementById('size').value = product?.size || '';
             document.getElementById('category').value = product?.category || '';
             document.getElementById('supplier').value = product?.supplier || '';
             document.getElementById('acquiredValue').value = product ? product.acquiredValue : '';
@@ -253,6 +260,7 @@
             const data = {
                 sku: document.getElementById('sku').value,
                 name: document.getElementById('name').value,
+                size: document.getElementById('size').value || null,
                 category: document.getElementById('category').value || null,
                 supplier: document.getElementById('supplier').value || null,
                 acquiredValue: parseFloat(document.getElementById('acquiredValue').value),

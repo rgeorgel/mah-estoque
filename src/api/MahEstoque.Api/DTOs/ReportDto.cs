@@ -20,6 +20,7 @@ public class ProductStockAlertDto
     public Guid Id { get; set; }
     public string SKU { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? Size { get; set; }
     public int Quantity { get; set; }
     public int MinStock { get; set; }
 }
@@ -64,6 +65,7 @@ public class ProductProfitDto
     public Guid ProductId { get; set; }
     public string SKU { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? Size { get; set; }
     public int TotalSold { get; set; }
     public decimal TotalRevenue { get; set; }
     public decimal TotalCost { get; set; }
@@ -84,7 +86,15 @@ public class ProductStockItemDto
     public string SKU { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Category { get; set; }
+    public string? Size { get; set; }
     public int Quantity { get; set; }
     public decimal AcquiredValue { get; set; }
+    public decimal TotalValue { get; set; }
+}
+
+public class SizeStockDto
+{
+    public string Size { get; set; } = string.Empty;
+    public int Count { get; set; }
     public decimal TotalValue { get; set; }
 }

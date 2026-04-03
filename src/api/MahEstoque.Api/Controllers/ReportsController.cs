@@ -105,4 +105,15 @@ public class ReportsController : ControllerBase
         var report = await _reportService.GetStockByCategoryAsync(tenantId);
         return Ok(report);
     }
+
+    [HttpGet("stock-by-size")]
+    public async Task<ActionResult<List<SizeStockDto>>> GetStockBySize()
+    {
+        if (!User.IsManagerOrAbove())
+            return Forbid();
+
+        var tenantId = User.GetTenantId();
+        var report = await _reportService.GetStockBySizeAsync(tenantId);
+        return Ok(report);
+    }
 }

@@ -33,6 +33,7 @@ public class TransactionDto
     public Guid ProductId { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public string ProductSKU { get; set; } = string.Empty;
+    public string? ProductSize { get; set; }
     public string Type { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public decimal UnitValue { get; set; }

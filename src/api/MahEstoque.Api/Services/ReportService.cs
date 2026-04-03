@@ -12,6 +12,7 @@ public interface IReportService
     Task<ProfitReportDto> GetProfitReportAsync(Guid tenantId, DateTime? startDate = null, DateTime? endDate = null);
     Task<StockReportDto> GetStockReportAsync(Guid tenantId);
     Task<List<CategoryStockDto>> GetStockByCategoryAsync(Guid tenantId);
+    Task<List<SizeStockDto>> GetStockBySizeAsync(Guid tenantId);
 }
 
 public class ReportService : IReportService
@@ -93,6 +94,7 @@ public class ReportService : IReportService
                 Id = p.Id,
                 SKU = p.SKU,
                 Name = p.Name,
+                Size = p.Size,
                 Quantity = p.Quantity,
                 MinStock = p.MinStock
             }).ToList(),
@@ -130,6 +132,7 @@ public class ReportService : IReportService
                 ProductId = t.ProductId,
                 ProductName = t.Product!.Name,
                 ProductSKU = t.Product.SKU,
+                ProductSize = t.Product.Size,
                 Type = t.Type.ToString(),
                 Quantity = t.Quantity,
                 UnitValue = t.UnitValue,
@@ -161,7 +164,7 @@ public class ReportService : IReportService
             .ToDictionaryAsync(p => p.Id);
 
         var productProfits = transactions
-            .GroupBy(t => new { t.ProductId, t.Product!.SKU, t.Product.Name })
+            .GroupBy(t => new { t.ProductId, t.Product!.SKU, t.Product.Name, t.Product.Size })
             .Select(g =>
             {
                 var totalSold = g.Sum(t => t.Quantity);
@@ -174,6 +177,7 @@ public class ReportService : IReportService
                     ProductId = g.Key.ProductId,
                     SKU = g.Key.SKU,
                     Name = g.Key.Name,
+                    Size = g.Key.Size,
                     TotalSold = totalSold,
                     TotalRevenue = totalRevenue,
                     TotalCost = totalCost,
@@ -206,6 +210,7 @@ public class ReportService : IReportService
                 SKU = p.SKU,
                 Name = p.Name,
                 Category = p.Category,
+                Size = p.Size,
                 Quantity = p.Quantity,
                 AcquiredValue = p.AcquiredValue,
                 TotalValue = p.Quantity * p.AcquiredValue
@@ -227,6 +232,21 @@ public class ReportService : IReportService
                 TotalValue = g.Sum(p => p.Quantity * p.AcquiredValue)
             })
             .OrderByDescending(c => c.TotalValue)
+            .ToListAsync();
+    }
+
+    public async Task<List<SizeStockDto>> GetStockBySizeAsync(Guid tenantId)
+    {
+        return await _context.Products
+            .Where(p => p.TenantId == tenantId)
+            .GroupBy(p => string.IsNullOrEmpty(p.Size) ? "Sem tamanho" : p.Size)
+            .Select(g => new SizeStockDto
+            {
+                Size = g.Key,
+                Count = g.Sum(p => p.Quantity),
+                TotalValue = g.Sum(p => p.Quantity * p.AcquiredValue)
+            })
+            .OrderByDescending(s => s.Count)
             .ToListAsync();
     }
 }

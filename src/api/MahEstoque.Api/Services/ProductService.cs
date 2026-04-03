@@ -41,6 +41,7 @@ public class ProductService : IProductService
                 Name = p.Name,
                 Category = p.Category,
                 Supplier = p.Supplier,
+                Size = p.Size,
                 AcquiredValue = p.AcquiredValue,
                 Quantity = p.Quantity,
                 MinStock = p.MinStock
@@ -65,7 +66,8 @@ public class ProductService : IProductService
             Quantity = request.Quantity,
             MinStock = request.MinStock,
             Category = request.Category,
-            Supplier = request.Supplier
+            Supplier = request.Supplier,
+            Size = request.Size
         };
 
         _context.Products.Add(product);
@@ -87,6 +89,7 @@ public class ProductService : IProductService
         if (request.MinStock.HasValue) product.MinStock = request.MinStock.Value;
         product.Category = request.Category ?? product.Category;
         product.Supplier = request.Supplier ?? product.Supplier;
+        product.Size = request.Size ?? product.Size;
         product.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -115,6 +118,7 @@ public class ProductService : IProductService
                 Name = p.Name,
                 Category = p.Category,
                 Supplier = p.Supplier,
+                Size = p.Size,
                 AcquiredValue = p.AcquiredValue,
                 Quantity = p.Quantity,
                 MinStock = p.MinStock
@@ -140,6 +144,7 @@ public class ProductService : IProductService
         MinStock = product.MinStock,
         Category = product.Category,
         Supplier = product.Supplier,
+        Size = product.Size,
         CreatedAt = product.CreatedAt,
         UpdatedAt = product.UpdatedAt
     };
