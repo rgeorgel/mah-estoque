@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendas - Mah Estoque</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">Mah Estoque</div>
+            <button class="hamburger" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav-links" id="navLinks">
+                <a href="dashboard.html" class="nav-link">Dashboard</a>
+                <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="vendas.html" class="nav-link">Vendas</a>
+                <a href="relatorios.html" class="nav-link">Relatórios</a>
+                <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+            </nav>
+            <div class="user-menu">
+                <span class="user-info" id="userName"></span>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <h1 class="page-title">Registrar Venda</h1>
+
+        <div class="card">
+            <form id="saleForm">
+                <div class="form-group">
+                    <label for="productSelect">Produto</label>
+                    <select id="productSelect" required>
+                        <option value="">Selecione um produto</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Estoque Atual</label>
+                    <div id="currentStock" class="stat-value">-</div>
+                </div>
+                <div class="form-group">
+                    <label for="quantity">Quantidade</label>
+                    <input type="number" id="quantity" required min="1" value="1">
+                </div>
+                <div class="form-group">
+                    <label for="unitValue">Valor de Venda (por unidade)</label>
+                    <input type="number" id="unitValue" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="saleDate">Data da Venda (opcional)</label>
+                    <input type="date" id="saleDate">
+                </div>
+                <div class="form-group">
+                    <label>Total</label>
+                    <div id="totalValue" class="stat-value">R$ 0,00</div>
+                </div>
+                <div id="saleError" class="alert alert-danger hidden"></div>
+                <div id="saleSuccess" class="alert alert-success hidden"></div>
+                <button type="submit" class="btn btn-success btn-block">Registrar Venda</button>
+            </form>
+        </div>
+
+        <h2 class="page-title mt-3">Últimas Vendas</h2>
+        <div class="card">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Produto</th>
+                            <th>SKU</th>
+                            <th>Quantidade</th>
+                            <th>Valor Unit.</th>
+                            <th>Total</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="salesTable"></tbody>
+                </table>
+            </div>
+            <div id="emptySales" class="empty-state hidden">
+                <p>Nenhuma venda registrada</p>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Editar Venda</h2>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <form id="editForm">
+                <input type="hidden" id="editTransactionId">
+                <div class="form-group">
+                    <label>Produto</label>
+                    <div id="editProductName" class="stat-value"></div>
+                </div>
+                <div class="form-group">
+                    <label for="editQuantity">Quantidade</label>
+                    <input type="number" id="editQuantity" required min="1">
+                </div>
+                <div class="form-group">
+                    <label for="editUnitValue">Valor de Venda (por unidade)</label>
+                    <input type="number" id="editUnitValue" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="editDate">Data da Venda</label>
+                    <input type="date" id="editDate">
+                </div>
+                <div id="editError" class="alert alert-danger hidden"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-danger" onclick="deleteTransaction()">Excluir</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/build.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+            document.querySelector('.hamburger').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+            });
+        });
+
+        if (!checkAuth()) {
+            throw new Error('Auth required');
+        }
+
+        const user = getCurrentUser();
+        document.getElementById('userName').textContent = user.username;
+
+        if (!checkRole(['Admin'])) {
+            document.getElementById('usersLink').style.display = 'none';
+        }
+
+        let products = [];
+
+        async function loadProducts() {
+            try {
+                products = await request('/products');
+                const select = document.getElementById('productSelect');
+                select.innerHTML = '<option value="">Selecione um produto</option>' +
+                    products.map(p => `<option value="${p.id}" data-stock="${p.quantity}">${p.name} (${p.sku}) - Estoque: ${p.quantity}</option>`).join('');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        async function loadSales() {
+            try {
+                const transactions = await request('/transactions');
+                const sales = transactions.filter(t => t.type === 'Sale');
+                const tbody = document.getElementById('salesTable');
+                const emptyState = document.getElementById('emptySales');
+
+                if (sales.length === 0) {
+                    tbody.innerHTML = '';
+                    emptyState.classList.remove('hidden');
+                    return;
+                }
+
+                emptyState.classList.add('hidden');
+                tbody.innerHTML = sales.map(s => `
+                    <tr>
+                        <td>${formatDate(s.createdAt)}</td>
+                        <td>${s.productName}</td>
+                        <td>${s.productSKU}</td>
+                        <td>${s.quantity}</td>
+                        <td>${formatCurrency(s.unitValue)}</td>
+                        <td>${formatCurrency(s.totalValue)}</td>
+                        <td class="actions">
+                            <button class="btn btn-sm btn-secondary" onclick="editTransaction('${s.id}')">Editar</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        document.getElementById('productSelect').addEventListener('change', (e) => {
+            const selected = e.target.options[e.target.selectedIndex];
+            const stock = selected.dataset.stock || '0';
+            document.getElementById('currentStock').textContent = stock;
+            document.getElementById('quantity').max = stock;
+        });
+
+        document.getElementById('quantity').addEventListener('input', calculateTotal);
+        document.getElementById('unitValue').addEventListener('input', calculateTotal);
+
+        function calculateTotal() {
+            const quantity = parseInt(document.getElementById('quantity').value) || 0;
+            const unitValue = parseFloat(document.getElementById('unitValue').value) || 0;
+            const total = quantity * unitValue;
+            document.getElementById('totalValue').textContent = formatCurrency(total);
+        }
+
+        document.getElementById('saleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorMsg = document.getElementById('saleError');
+            const successMsg = document.getElementById('saleSuccess');
+            errorMsg.classList.add('hidden');
+            successMsg.classList.add('hidden');
+
+            const productId = document.getElementById('productSelect').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+            const unitValue = parseFloat(document.getElementById('unitValue').value);
+            const saleDateInput = document.getElementById('saleDate').value;
+
+            const data = {
+                productId,
+                type: 'Sale',
+                quantity,
+                unitValue
+            };
+
+            if (saleDateInput) {
+                const date = new Date(saleDateInput);
+                date.setHours(12, 0, 0, 0);
+                data.createdAt = date.toISOString();
+            }
+
+            try {
+                await request('/transactions', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+
+                successMsg.textContent = 'Venda registrada com sucesso!';
+                successMsg.classList.remove('hidden');
+                document.getElementById('saleForm').reset();
+                document.getElementById('currentStock').textContent = '-';
+                document.getElementById('totalValue').textContent = 'R$ 0,00';
+
+                loadProducts();
+                loadSales();
+                showToast('Venda registrada com sucesso');
+            } catch (error) {
+                errorMsg.textContent = error.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+
+        async function editTransaction(id) {
+            try {
+                const transactions = await request('/transactions');
+                const sale = transactions.find(t => t.id === id);
+                if (!sale) {
+                    showToast('Venda não encontrada', 'error');
+                    return;
+                }
+
+                document.getElementById('editTransactionId').value = id;
+                document.getElementById('editProductName').textContent = sale.productName;
+                document.getElementById('editQuantity').value = sale.quantity;
+                document.getElementById('editUnitValue').value = sale.unitValue;
+                
+                const date = new Date(sale.createdAt);
+                date.setHours(date.getHours() + 3);
+                document.getElementById('editDate').value = date.toISOString().split('T')[0];
+                
+                document.getElementById('editError').classList.add('hidden');
+                document.getElementById('editModal').classList.add('active');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorMsg = document.getElementById('editError');
+            errorMsg.classList.add('hidden');
+
+            const id = document.getElementById('editTransactionId').value;
+            const quantity = parseInt(document.getElementById('editQuantity').value);
+            const unitValue = parseFloat(document.getElementById('editUnitValue').value);
+            const dateInput = document.getElementById('editDate').value;
+
+            const data = { quantity, unitValue };
+            if (dateInput) {
+                const date = new Date(dateInput);
+                date.setHours(12, 0, 0, 0);
+                data.createdAt = date.toISOString();
+            }
+
+            try {
+                await request(`/transactions/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+                showToast('Venda atualizada com sucesso');
+                closeEditModal();
+                loadProducts();
+                loadSales();
+            } catch (error) {
+                errorMsg.textContent = error.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+
+        async function deleteTransaction() {
+            const id = document.getElementById('editTransactionId').value;
+            if (!confirm('Tem certeza que deseja excluir esta venda?')) return;
+
+            try {
+                await request(`/transactions/${id}`, { method: 'DELETE' });
+                showToast('Venda excluída com sucesso');
+                closeEditModal();
+                loadProducts();
+                loadSales();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        loadProducts();
+        loadSales();
+    </script>
+</body>
+</html>

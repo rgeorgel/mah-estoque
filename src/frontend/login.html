@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Mah Estoque</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>Mah Estoque</h1>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Usuário</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <div id="errorMessage" class="alert alert-danger hidden"></div>
+                <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+            </form>
+            <p class="text-center mt-2">
+                Não tem conta? <a href="register.html" style="color: var(--primary);">Cadastrar</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="js/build.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        if (auth.isLoggedIn()) {
+            window.location.href = 'dashboard.html';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorMsg = document.getElementById('errorMessage');
+            errorMsg.classList.add('hidden');
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const data = await request('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, password })
+                });
+
+                auth.setAuth(data.token, data.user);
+                window.location.href = 'dashboard.html';
+            } catch (error) {
+                errorMsg.textContent = error.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

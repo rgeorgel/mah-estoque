@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuários - Mah Estoque</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">Mah Estoque</div>
+            <button class="hamburger" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav-links" id="navLinks">
+                <a href="dashboard.html" class="nav-link">Dashboard</a>
+                <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="vendas.html" class="nav-link">Vendas</a>
+                <a href="relatorios.html" class="nav-link">Relatórios</a>
+                <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+            </nav>
+            <div class="user-menu">
+                <span class="user-info" id="userName"></span>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <h1 class="page-title">Gerenciamento de Usuários</h1>
+
+        <div class="search-bar">
+            <button class="btn btn-primary" onclick="openModal()">+ Novo Usuário</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando usuários...</p>
+        </div>
+
+        <div class="card">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Data de Criação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTable"></tbody>
+                </table>
+            </div>
+            <div id="emptyState" class="empty-state hidden">
+                <p>Nenhum usuário encontrado</p>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="userModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Novo Usuário</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="userForm">
+                <input type="hidden" id="userId">
+                <div class="form-group">
+                    <label for="username">Usuário</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email (opcional)</label>
+                    <input type="email" id="email">
+                </div>
+                <div class="form-group" id="passwordGroup">
+                    <label for="password">Senha</label>
+                    <input type="password" id="password" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="role">Função</label>
+                    <select id="role" required>
+                        <option value="Employee">Funcionário</option>
+                        <option value="Manager">Gerente</option>
+                        <option value="Admin">Administrador</option>
+                    </select>
+                </div>
+                <div id="modalError" class="alert alert-danger hidden"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/build.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+            document.querySelector('.hamburger').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+            });
+        });
+
+        if (!checkAuth()) {
+            throw new Error('Auth required');
+        }
+
+        if (!checkRole(['Admin'])) {
+            window.location.href = 'dashboard.html';
+        }
+
+        const user = getCurrentUser();
+        document.getElementById('userName').textContent = user.username;
+
+        let users = [];
+
+        async function loadUsers() {
+            try {
+                users = await request('/users');
+                renderUsers();
+                document.getElementById('loading').classList.add('hidden');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        function renderUsers() {
+            const tbody = document.getElementById('usersTable');
+            const emptyState = document.getElementById('emptyState');
+
+            if (users.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            const currentUserId = user.id;
+            
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.username}</td>
+                    <td>${u.email || '-'}</td>
+                    <td><span class="badge ${getRoleBadge(u.role)}">${getRoleLabel(u.role)}</span></td>
+                    <td>${formatDate(u.createdAt)}</td>
+                    <td class="actions">
+                        <button class="btn btn-sm btn-secondary" onclick="editUser('${u.id}')">Editar</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')" ${u.id === currentUserId ? 'disabled' : ''}>Excluir</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function getRoleBadge(role) {
+            switch(role) {
+                case 'Admin': return 'badge-danger';
+                case 'Manager': return 'badge-warning';
+                default: return 'badge-info';
+            }
+        }
+
+        function getRoleLabel(role) {
+            switch(role) {
+                case 'Admin': return 'Administrador';
+                case 'Manager': return 'Gerente';
+                default: return 'Funcionário';
+            }
+        }
+
+        function openModal(userData = null) {
+            document.getElementById('modalTitle').textContent = userData ? 'Editar Usuário' : 'Novo Usuário';
+            document.getElementById('userId').value = userData ? userData.id : '';
+            document.getElementById('username').value = userData ? userData.username : '';
+            document.getElementById('email').value = userData?.email || '';
+            document.getElementById('role').value = userData ? userData.role : 'Employee';
+            
+            const passwordGroup = document.getElementById('passwordGroup');
+            const passwordInput = document.getElementById('password');
+            if (userData) {
+                passwordGroup.querySelector('label').textContent = 'Nova Senha (deixe em branco para manter)';
+                passwordInput.required = false;
+            } else {
+                passwordGroup.querySelector('label').textContent = 'Senha';
+                passwordInput.required = true;
+            }
+            
+            document.getElementById('modalError').classList.add('hidden');
+            document.getElementById('userModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('userModal').classList.remove('active');
+        }
+
+        function editUser(id) {
+            const userData = users.find(u => u.id === id);
+            if (userData) openModal(userData);
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+
+            try {
+                await request(`/users/${id}`, { method: 'DELETE' });
+                showToast('Usuário excluído com sucesso');
+                loadUsers();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorMsg = document.getElementById('modalError');
+            errorMsg.classList.add('hidden');
+
+            const id = document.getElementById('userId').value;
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const role = document.getElementById('role').value;
+            const password = document.getElementById('password').value;
+
+            const data = {
+                username,
+                email: email || null,
+                role
+            };
+            
+            if (password) {
+                data.password = password;
+            }
+
+            try {
+                if (id) {
+                    await request(`/users/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(data)
+                    });
+                    showToast('Usuário atualizado com sucesso');
+                } else {
+                    await request('/users', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                    showToast('Usuário criado com sucesso');
+                }
+                closeModal();
+                loadUsers();
+            } catch (error) {
+                errorMsg.textContent = error.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+
+        loadUsers();
+    </script>
+</body>
+</html>

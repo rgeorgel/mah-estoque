@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produtos - Mah Estoque</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">Mah Estoque</div>
+            <button class="hamburger" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav-links" id="navLinks">
+                <a href="dashboard.html" class="nav-link">Dashboard</a>
+                <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="vendas.html" class="nav-link">Vendas</a>
+                <a href="relatorios.html" class="nav-link">Relatórios</a>
+                <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+            </nav>
+            <div class="user-menu">
+                <span class="user-info" id="userName"></span>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <h1 class="page-title">Produtos</h1>
+
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Buscar por nome ou SKU...">
+            <select id="categoryFilter">
+                <option value="">Todas as categorias</option>
+            </select>
+            <button class="btn btn-primary" onclick="openModal()">+ Novo Produto</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando produtos...</p>
+        </div>
+
+        <div class="card">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Nome</th>
+                            <th>Categoria</th>
+                            <th>Fornecedor</th>
+                            <th>Valor Custo</th>
+                            <th>Quantidade</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTable"></tbody>
+                </table>
+            </div>
+            <div id="emptyState" class="empty-state hidden">
+                <p>Nenhum produto encontrado</p>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="productModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Novo Produto</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="productForm">
+                <input type="hidden" id="productId">
+                <div class="form-group">
+                    <label for="sku">SKU</label>
+                    <input type="text" id="sku" required>
+                </div>
+                <div class="form-group">
+                    <label for="name">Nome</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="category">Categoria (opcional)</label>
+                    <input type="text" id="category">
+                </div>
+                <div class="form-group">
+                    <label for="supplier">Fornecedor (opcional)</label>
+                    <input type="text" id="supplier">
+                </div>
+                <div class="form-group">
+                    <label for="acquiredValue">Valor de Aquisição</label>
+                    <input type="number" id="acquiredValue" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="quantity">Quantidade</label>
+                    <input type="number" id="quantity" required min="0">
+                </div>
+                <div class="form-group">
+                    <label for="minStock">Estoque Mínimo</label>
+                    <input type="number" id="minStock" required min="0" value="5">
+                </div>
+                <div id="modalError" class="alert alert-danger hidden"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/build.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+            document.querySelector('.hamburger').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+            });
+        });
+
+        if (!checkAuth()) {
+            throw new Error('Auth required');
+        }
+
+        if (!checkRole(['Admin', 'Manager'])) {
+            window.location.href = 'dashboard.html';
+        }
+
+        const user = getCurrentUser();
+        document.getElementById('userName').textContent = user.username;
+
+        if (!checkRole(['Admin'])) {
+            document.getElementById('usersLink').style.display = 'none';
+        }
+
+        let products = [];
+
+        async function loadProducts() {
+            try {
+                products = await request('/products');
+                renderProducts(products);
+                updateCategoryFilter();
+                document.getElementById('loading').classList.add('hidden');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        function renderProducts(data) {
+            const tbody = document.getElementById('productsTable');
+            const emptyState = document.getElementById('emptyState');
+
+            if (data.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            tbody.innerHTML = data.map(p => `
+                <tr>
+                    <td>${p.sku}</td>
+                    <td>${p.name}</td>
+                    <td>${p.category || '-'}</td>
+                    <td>${p.supplier || '-'}</td>
+                    <td>${formatCurrency(p.acquiredValue)}</td>
+                    <td>
+                        <span class="badge ${p.quantity <= p.minStock ? 'badge-danger' : 'badge-success'}">
+                            ${p.quantity}
+                        </span>
+                    </td>
+                    <td class="actions">
+                        <button class="btn btn-sm btn-secondary" onclick="editProduct('${p.id}')">Editar</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Excluir</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateCategoryFilter() {
+            const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
+            const select = document.getElementById('categoryFilter');
+            select.innerHTML = '<option value="">Todas as categorias</option>' +
+                categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        document.getElementById('searchInput').addEventListener('input', debounce((e) => {
+            const search = e.target.value.toLowerCase();
+            const category = document.getElementById('categoryFilter').value;
+            const filtered = products.filter(p => {
+                const matchSearch = p.name.toLowerCase().includes(search) || p.sku.toLowerCase().includes(search);
+                const matchCategory = !category || p.category === category;
+                return matchSearch && matchCategory;
+            });
+            renderProducts(filtered);
+        }, 300));
+
+        document.getElementById('categoryFilter').addEventListener('change', () => {
+            document.getElementById('searchInput').dispatchEvent(new Event('input'));
+        });
+
+        function openModal(product = null) {
+            document.getElementById('modalTitle').textContent = product ? 'Editar Produto' : 'Novo Produto';
+            document.getElementById('productId').value = product ? product.id : '';
+            document.getElementById('sku').value = product ? product.sku : '';
+            document.getElementById('name').value = product ? product.name : '';
+            document.getElementById('category').value = product?.category || '';
+            document.getElementById('supplier').value = product?.supplier || '';
+            document.getElementById('acquiredValue').value = product ? product.acquiredValue : '';
+            document.getElementById('quantity').value = product ? product.quantity : '';
+            document.getElementById('minStock').value = product ? product.minStock : '5';
+            document.getElementById('modalError').classList.add('hidden');
+            document.getElementById('productModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('productModal').classList.remove('active');
+        }
+
+        function editProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (product) openModal(product);
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+
+            try {
+                await request(`/products/${id}`, { method: 'DELETE' });
+                showToast('Produto excluído com sucesso');
+                loadProducts();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        document.getElementById('productForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorMsg = document.getElementById('modalError');
+            errorMsg.classList.add('hidden');
+
+            const id = document.getElementById('productId').value;
+            const data = {
+                sku: document.getElementById('sku').value,
+                name: document.getElementById('name').value,
+                category: document.getElementById('category').value || null,
+                supplier: document.getElementById('supplier').value || null,
+                acquiredValue: parseFloat(document.getElementById('acquiredValue').value),
+                quantity: parseInt(document.getElementById('quantity').value),
+                minStock: parseInt(document.getElementById('minStock').value)
+            };
+
+            try {
+                if (id) {
+                    await request(`/products/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(data)
+                    });
+                    showToast('Produto atualizado com sucesso');
+                } else {
+                    await request('/products', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                    showToast('Produto criado com sucesso');
+                }
+                closeModal();
+                loadProducts();
+            } catch (error) {
+                errorMsg.textContent = error.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+
+        loadProducts();
+    </script>
+</body>
+</html>

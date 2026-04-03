@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Mah Estoque</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">Mah Estoque</div>
+            <button class="hamburger" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav-links" id="navLinks">
+                <a href="dashboard.html" class="nav-link active">Dashboard</a>
+                <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="vendas.html" class="nav-link">Vendas</a>
+                <a href="relatorios.html" class="nav-link">Relatórios</a>
+                <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+            </nav>
+            <div class="user-menu">
+                <span class="user-info" id="userName"></span>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <h1 class="page-title">Dashboard</h1>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando dados...</p>
+        </div>
+
+        <div id="dashboardContent" class="hidden">
+            <div class="stats-grid">
+                <div class="stat-card primary">
+                    <div class="stat-label">Total de Produtos</div>
+                    <div class="stat-value" id="totalProducts">0</div>
+                </div>
+                <div class="stat-card info">
+                    <div class="stat-label">Valor em Estoque</div>
+                    <div class="stat-value" id="totalStockValue">R$ 0,00</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-label">Vendas Hoje</div>
+                    <div class="stat-value" id="salesToday">0</div>
+                    <div class="stat-sub" id="revenueToday">R$ 0,00</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-label">Receita Total</div>
+                    <div class="stat-value" id="totalRevenue">R$ 0,00</div>
+                    <div class="stat-sub" id="totalProfit">Lucro: R$ 0,00</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-label">Estoque Baixo</div>
+                    <div class="stat-value" id="lowStockCount">0</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+                <div class="card">
+                    <h2 class="card-title">Vendas por Dia (Últimos 7 dias)</h2>
+                    <div class="chart-container">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2 class="card-title">Estoque por Categoria</h2>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+                <div class="card" style="grid-column: 1 / -1;">
+                    <h2 class="card-title">Vendas por Semana (Últimos 3 meses)</h2>
+                    <div class="chart-container">
+                        <canvas id="weeklyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="lowStockCard" style="display: none;">
+                <h2 class="card-title">Produtos com Estoque Baixo</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Nome</th>
+                                <th>Quantidade</th>
+                                <th>Mín. Estoque</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lowStockTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/build.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        let salesChart = null;
+        let categoryChart = null;
+        let weeklyChart = null;
+
+        if (!checkAuth()) {
+            throw new Error('Auth required');
+        }
+
+        const user = getCurrentUser();
+        document.getElementById('userName').textContent = user.username;
+
+        if (!checkRole(['Admin', 'Manager'])) {
+            document.getElementById('usersLink').style.display = 'none';
+        }
+
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+            document.querySelector('.hamburger').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+            });
+        });
+
+        async function loadDashboard() {
+            try {
+                const stats = await request('/dashboard/stats');
+                
+                document.getElementById('totalProducts').textContent = stats.totalProducts;
+                document.getElementById('totalStockValue').textContent = formatCurrency(stats.totalStockValue);
+                document.getElementById('salesToday').textContent = stats.salesToday;
+                document.getElementById('revenueToday').textContent = formatCurrency(stats.revenueToday);
+                document.getElementById('totalRevenue').textContent = formatCurrency(stats.totalRevenue);
+                document.getElementById('totalProfit').textContent = `Lucro: ${formatCurrency(stats.totalProfit)}`;
+                document.getElementById('lowStockCount').textContent = stats.lowStockCount;
+
+                if (stats.lowStockProducts.length > 0) {
+                    document.getElementById('lowStockCard').style.display = 'block';
+                    const tbody = document.getElementById('lowStockTable');
+                    tbody.innerHTML = stats.lowStockProducts.map(p => `
+                        <tr>
+                            <td>${p.sku}</td>
+                            <td>${p.name}</td>
+                            <td><span class="badge badge-danger">${p.quantity}</span></td>
+                            <td>${p.minStock}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                renderSalesChart(stats.salesByDay);
+                renderCategoryChart(stats.stockByCategory);
+                renderWeeklyChart(stats.salesByWeek);
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('dashboardContent').classList.remove('hidden');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        function renderSalesChart(data) {
+            const ctx = document.getElementById('salesChart').getContext('2d');
+            
+            if (salesChart) {
+                salesChart.destroy();
+            }
+
+            salesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Receita',
+                        data: data.map(d => d.revenue),
+                        backgroundColor: '#2563eb',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: value => formatCurrency(value)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderCategoryChart(data) {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            
+            if (categoryChart) {
+                categoryChart.destroy();
+            }
+
+            const colors = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+            
+            categoryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.map(d => d.category),
+                    datasets: [{
+                        data: data.map(d => d.count),
+                        backgroundColor: colors.slice(0, data.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderWeeklyChart(data) {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            
+            if (weeklyChart) {
+                weeklyChart.destroy();
+            }
+
+            weeklyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.week),
+                    datasets: [{
+                        label: 'Receita',
+                        data: data.map(d => d.revenue),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: value => formatCurrency(value)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>
