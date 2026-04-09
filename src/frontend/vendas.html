@@ -40,6 +40,12 @@
                         <option value="">Selecione um produto</option>
                     </select>
                 </div>
+                <div class="form-group hidden" id="variantGroup">
+                    <label for="variantSelect">Variação</label>
+                    <select id="variantSelect" required>
+                        <option value="">Selecione uma variação</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Estoque Atual</label>
                     <div id="currentStock" class="stat-value">-</div>
@@ -74,8 +80,7 @@
                         <tr>
                             <th>Data</th>
                             <th>Produto</th>
-                            <th>SKU</th>
-                            <th>Tamanho</th>
+                            <th>Variação</th>
                             <th>Quantidade</th>
                             <th>Valor Unit.</th>
                             <th>Total</th>
@@ -157,7 +162,15 @@
                 products = await request('/products');
                 const select = document.getElementById('productSelect');
                 select.innerHTML = '<option value="">Selecione um produto</option>' +
-                    products.map(p => `<option value="${p.id}" data-stock="${p.quantity}">${p.name} (${p.sku})${p.size ? ' - Tam: ' + p.size : ''} - Estoque: ${p.quantity}</option>`).join('');
+                    products.map(p => {
+                        const totalQty = p.variants && p.variants.length > 0
+                            ? p.variants.reduce((s, v) => s + v.quantity, 0)
+                            : p.quantity;
+                        const label = p.variants && p.variants.length > 0
+                            ? `${p.name} (${p.variants.length} variações)`
+                            : `${p.name}${p.sku ? ' [' + p.sku + ']' : ''}${p.size ? ' - ' + p.size : ''} - Estoque: ${totalQty}`;
+                        return `<option value="${p.id}">${label}</option>`;
+                    }).join('');
             } catch (error) {
                 showToast(error.message, 'error');
             }
@@ -177,26 +190,66 @@
                 }
 
                 emptyState.classList.add('hidden');
-                tbody.innerHTML = sales.map(s => `
+                tbody.innerHTML = sales.map(s => {
+                    let variantLabel = '-';
+                    if (s.variantSize || s.variantColor) {
+                        variantLabel = [s.variantSize, s.variantColor].filter(Boolean).join(' / ');
+                        if (s.variantSKU) variantLabel += ` [${s.variantSKU}]`;
+                    } else if (s.productSize) {
+                        variantLabel = s.productSize;
+                    }
+                    return `
                     <tr>
                         <td>${formatDate(s.createdAt)}</td>
                         <td>${s.productName}</td>
-                        <td>${s.productSKU}</td>
-                        <td>${s.productSize || '-'}</td>
+                        <td>${variantLabel}</td>
                         <td>${s.quantity}</td>
                         <td>${formatCurrency(s.unitValue)}</td>
                         <td>${formatCurrency(s.totalValue)}</td>
                         <td class="actions">
                             <button class="btn btn-sm btn-secondary" onclick="editTransaction('${s.id}')">Editar</button>
                         </td>
-                    </tr>
-                `).join('');
+                    </tr>`;
+                }).join('');
             } catch (error) {
                 showToast(error.message, 'error');
             }
         }
 
         document.getElementById('productSelect').addEventListener('change', (e) => {
+            const productId = e.target.value;
+            const product = products.find(p => p.id === productId);
+            const variantGroup = document.getElementById('variantGroup');
+            const variantSelect = document.getElementById('variantSelect');
+
+            if (!product) {
+                variantGroup.classList.add('hidden');
+                variantSelect.required = false;
+                document.getElementById('currentStock').textContent = '-';
+                return;
+            }
+
+            if (product.variants && product.variants.length > 0) {
+                variantGroup.classList.remove('hidden');
+                variantSelect.required = true;
+                variantSelect.innerHTML = '<option value="">Selecione uma variação</option>' +
+                    product.variants.map(v => {
+                        const label = [v.size, v.color].filter(Boolean).join(' / ') || 'Sem nome';
+                        const sku = v.sku ? ` [${v.sku}]` : '';
+                        return `<option value="${v.id}" data-stock="${v.quantity}">${label}${sku} — Estoque: ${v.quantity}</option>`;
+                    }).join('');
+                document.getElementById('currentStock').textContent = '-';
+                document.getElementById('quantity').max = '';
+            } else {
+                variantGroup.classList.add('hidden');
+                variantSelect.required = false;
+                variantSelect.value = '';
+                document.getElementById('currentStock').textContent = product.quantity;
+                document.getElementById('quantity').max = product.quantity;
+            }
+        });
+
+        document.getElementById('variantSelect').addEventListener('change', (e) => {
             const selected = e.target.options[e.target.selectedIndex];
             const stock = selected.dataset.stock || '0';
             document.getElementById('currentStock').textContent = stock;
@@ -209,8 +262,7 @@
         function calculateTotal() {
             const quantity = parseInt(document.getElementById('quantity').value) || 0;
             const unitValue = parseFloat(document.getElementById('unitValue').value) || 0;
-            const total = quantity * unitValue;
-            document.getElementById('totalValue').textContent = formatCurrency(total);
+            document.getElementById('totalValue').textContent = formatCurrency(quantity * unitValue);
         }
 
         document.getElementById('saleForm').addEventListener('submit', async (e) => {
@@ -221,17 +273,13 @@
             successMsg.classList.add('hidden');
 
             const productId = document.getElementById('productSelect').value;
+            const variantId = document.getElementById('variantSelect').value || null;
             const quantity = parseInt(document.getElementById('quantity').value);
             const unitValue = parseFloat(document.getElementById('unitValue').value);
             const saleDateInput = document.getElementById('saleDate').value;
 
-            const data = {
-                productId,
-                type: 'Sale',
-                quantity,
-                unitValue
-            };
-
+            const data = { productId, type: 'Sale', quantity, unitValue };
+            if (variantId) data.variantId = variantId;
             if (saleDateInput) {
                 const date = new Date(saleDateInput);
                 date.setHours(12, 0, 0, 0);
@@ -247,6 +295,8 @@
                 successMsg.textContent = 'Venda registrada com sucesso!';
                 successMsg.classList.remove('hidden');
                 document.getElementById('saleForm').reset();
+                document.getElementById('variantGroup').classList.add('hidden');
+                document.getElementById('variantSelect').required = false;
                 document.getElementById('currentStock').textContent = '-';
                 document.getElementById('totalValue').textContent = 'R$ 0,00';
 
@@ -268,15 +318,20 @@
                     return;
                 }
 
+                let productLabel = sale.productName;
+                if (sale.variantSize || sale.variantColor) {
+                    productLabel += ' — ' + [sale.variantSize, sale.variantColor].filter(Boolean).join(' / ');
+                }
+
                 document.getElementById('editTransactionId').value = id;
-                document.getElementById('editProductName').textContent = sale.productName;
+                document.getElementById('editProductName').textContent = productLabel;
                 document.getElementById('editQuantity').value = sale.quantity;
                 document.getElementById('editUnitValue').value = sale.unitValue;
-                
+
                 const date = new Date(sale.createdAt);
                 date.setHours(date.getHours() + 3);
                 document.getElementById('editDate').value = date.toISOString().split('T')[0];
-                
+
                 document.getElementById('editError').classList.add('hidden');
                 document.getElementById('editModal').classList.add('active');
             } catch (error) {

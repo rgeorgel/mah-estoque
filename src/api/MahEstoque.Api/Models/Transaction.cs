@@ -27,6 +27,11 @@ public class Transaction
     [ForeignKey(nameof(ProductId))]
     public Product? Product { get; set; }
 
+    public Guid? VariantId { get; set; }
+
+    [ForeignKey(nameof(VariantId))]
+    public ProductVariant? Variant { get; set; }
+
     public TransactionType Type { get; set; }
 
     public int Quantity { get; set; }

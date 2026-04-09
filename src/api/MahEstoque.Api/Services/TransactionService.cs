@@ -26,6 +26,7 @@ public class TransactionService : ITransactionService
     {
         var query = _context.Transactions
             .Include(t => t.Product)
+            .Include(t => t.Variant)
             .Where(t => t.TenantId == tenantId);
 
         if (startDate.HasValue)
@@ -42,6 +43,10 @@ public class TransactionService : ITransactionService
                 ProductName = t.Product!.Name,
                 ProductSKU = t.Product.SKU,
                 ProductSize = t.Product.Size,
+                VariantId = t.VariantId,
+                VariantSize = t.Variant != null ? t.Variant.Size : null,
+                VariantColor = t.Variant != null ? t.Variant.Color : null,
+                VariantSKU = t.Variant != null ? t.Variant.SKU : null,
                 Type = t.Type.ToString(),
                 Quantity = t.Quantity,
                 UnitValue = t.UnitValue,
@@ -53,18 +58,32 @@ public class TransactionService : ITransactionService
 
     public async Task<TransactionDto> CreateAsync(CreateTransactionRequest request, Guid tenantId)
     {
-        var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == request.ProductId && p.TenantId == tenantId);
+        var product = await _context.Products
+            .Include(p => p.Variants)
+            .FirstOrDefaultAsync(p => p.Id == request.ProductId && p.TenantId == tenantId);
         if (product == null)
             throw new KeyNotFoundException("Produto não encontrado");
 
         var totalValue = request.Quantity * request.UnitValue;
-
         var transactionType = Enum.Parse<TransactionType>(request.Type, true);
+
+        ProductVariant? variant = null;
+        if (request.VariantId.HasValue)
+        {
+            variant = product.Variants.FirstOrDefault(v => v.Id == request.VariantId.Value);
+            if (variant == null)
+                throw new KeyNotFoundException("Variação não encontrada");
+        }
+        else if (product.Variants.Any())
+        {
+            throw new InvalidOperationException("Este produto possui variações. Selecione uma variação.");
+        }
 
         var transaction = new Transaction
         {
             TenantId = tenantId,
             ProductId = request.ProductId,
+            VariantId = request.VariantId,
             Type = transactionType,
             Quantity = request.Quantity,
             UnitValue = request.UnitValue,
@@ -72,19 +91,42 @@ public class TransactionService : ITransactionService
             CreatedAt = request.CreatedAt?.ToUniversalTime() ?? DateTime.UtcNow
         };
 
-        if (transactionType == TransactionType.Sale)
+        if (variant != null)
         {
-            if (product.Quantity < request.Quantity)
-                throw new InvalidOperationException("Estoque insuficiente");
-            product.Quantity -= request.Quantity;
+            if (transactionType == TransactionType.Sale)
+            {
+                if (variant.Quantity < request.Quantity)
+                    throw new InvalidOperationException("Estoque insuficiente para esta variação");
+                variant.Quantity -= request.Quantity;
+                variant.UpdatedAt = DateTime.UtcNow;
+            }
+            else if (transactionType == TransactionType.Purchase)
+            {
+                variant.Quantity += request.Quantity;
+                variant.UpdatedAt = DateTime.UtcNow;
+            }
+            else if (transactionType == TransactionType.Adjustment)
+            {
+                variant.Quantity = request.Quantity;
+                variant.UpdatedAt = DateTime.UtcNow;
+            }
         }
-        else if (transactionType == TransactionType.Purchase)
+        else
         {
-            product.Quantity += request.Quantity;
-        }
-        else if (transactionType == TransactionType.Adjustment)
-        {
-            product.Quantity = request.Quantity;
+            if (transactionType == TransactionType.Sale)
+            {
+                if (product.Quantity < request.Quantity)
+                    throw new InvalidOperationException("Estoque insuficiente");
+                product.Quantity -= request.Quantity;
+            }
+            else if (transactionType == TransactionType.Purchase)
+            {
+                product.Quantity += request.Quantity;
+            }
+            else if (transactionType == TransactionType.Adjustment)
+            {
+                product.Quantity = request.Quantity;
+            }
         }
 
         product.UpdatedAt = DateTime.UtcNow;
@@ -99,6 +141,10 @@ public class TransactionService : ITransactionService
             ProductName = product.Name,
             ProductSKU = product.SKU,
             ProductSize = product.Size,
+            VariantId = variant?.Id,
+            VariantSize = variant?.Size,
+            VariantColor = variant?.Color,
+            VariantSKU = variant?.SKU,
             Type = transaction.Type.ToString(),
             Quantity = transaction.Quantity,
             UnitValue = transaction.UnitValue,
@@ -111,21 +157,22 @@ public class TransactionService : ITransactionService
     {
         var transaction = await _context.Transactions
             .Include(t => t.Product)
+                .ThenInclude(p => p!.Variants)
+            .Include(t => t.Variant)
             .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId);
-        
+
         if (transaction == null)
             throw new KeyNotFoundException("Transação não encontrada");
 
-        var product = transaction.Product;
-        if (product == null)
-            throw new KeyNotFoundException("Produto não encontrado");
+        var product = transaction.Product!;
+        var variant = transaction.Variant;
 
         var oldQuantity = transaction.Quantity;
         var oldType = transaction.Type;
 
         if (request.Quantity.HasValue)
             transaction.Quantity = request.Quantity.Value;
-        
+
         if (request.UnitValue.HasValue)
             transaction.UnitValue = request.UnitValue.Value;
 
@@ -134,20 +181,39 @@ public class TransactionService : ITransactionService
         if (request.CreatedAt.HasValue)
             transaction.CreatedAt = request.CreatedAt.Value.ToUniversalTime();
 
-        if (oldType == TransactionType.Sale)
-            product.Quantity += oldQuantity;
-        else if (oldType == TransactionType.Purchase)
-            product.Quantity -= oldQuantity;
-
-        if (transaction.Type == TransactionType.Sale)
+        // Reverse old effect
+        if (variant != null)
         {
-            if (product.Quantity < transaction.Quantity)
-                throw new InvalidOperationException("Estoque insuficiente");
-            product.Quantity -= transaction.Quantity;
+            if (oldType == TransactionType.Sale) variant.Quantity += oldQuantity;
+            else if (oldType == TransactionType.Purchase) variant.Quantity -= oldQuantity;
+            // Apply new effect
+            if (transaction.Type == TransactionType.Sale)
+            {
+                if (variant.Quantity < transaction.Quantity)
+                    throw new InvalidOperationException("Estoque insuficiente para esta variação");
+                variant.Quantity -= transaction.Quantity;
+            }
+            else if (transaction.Type == TransactionType.Purchase)
+            {
+                variant.Quantity += transaction.Quantity;
+            }
+            variant.UpdatedAt = DateTime.UtcNow;
         }
-        else if (transaction.Type == TransactionType.Purchase)
+        else
         {
-            product.Quantity += transaction.Quantity;
+            if (oldType == TransactionType.Sale) product.Quantity += oldQuantity;
+            else if (oldType == TransactionType.Purchase) product.Quantity -= oldQuantity;
+            // Apply new effect
+            if (transaction.Type == TransactionType.Sale)
+            {
+                if (product.Quantity < transaction.Quantity)
+                    throw new InvalidOperationException("Estoque insuficiente");
+                product.Quantity -= transaction.Quantity;
+            }
+            else if (transaction.Type == TransactionType.Purchase)
+            {
+                product.Quantity += transaction.Quantity;
+            }
         }
 
         product.UpdatedAt = DateTime.UtcNow;
@@ -160,6 +226,10 @@ public class TransactionService : ITransactionService
             ProductName = product.Name,
             ProductSKU = product.SKU,
             ProductSize = product.Size,
+            VariantId = variant?.Id,
+            VariantSize = variant?.Size,
+            VariantColor = variant?.Color,
+            VariantSKU = variant?.SKU,
             Type = transaction.Type.ToString(),
             Quantity = transaction.Quantity,
             UnitValue = transaction.UnitValue,
@@ -172,13 +242,27 @@ public class TransactionService : ITransactionService
     {
         var transaction = await _context.Transactions
             .Include(t => t.Product)
+            .Include(t => t.Variant)
             .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId);
-        
+
         if (transaction == null)
             throw new KeyNotFoundException("Transação não encontrada");
 
         var product = transaction.Product;
-        if (product != null)
+        var variant = transaction.Variant;
+
+        if (variant != null)
+        {
+            if (transaction.Type == TransactionType.Sale)
+                variant.Quantity += transaction.Quantity;
+            else if (transaction.Type == TransactionType.Purchase)
+                variant.Quantity -= transaction.Quantity;
+            else if (transaction.Type == TransactionType.Adjustment)
+                variant.Quantity = 0;
+
+            variant.UpdatedAt = DateTime.UtcNow;
+        }
+        else if (product != null)
         {
             if (transaction.Type == TransactionType.Sale)
                 product.Quantity += transaction.Quantity;

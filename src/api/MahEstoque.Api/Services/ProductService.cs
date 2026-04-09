@@ -27,31 +27,42 @@ public class ProductService : IProductService
 
     public async Task<List<ProductListItemDto>> GetAllAsync(Guid tenantId, string? category = null)
     {
-        var query = _context.Products.Where(p => p.TenantId == tenantId);
+        var query = _context.Products
+            .Include(p => p.Variants)
+            .Where(p => p.TenantId == tenantId);
 
         if (!string.IsNullOrEmpty(category))
             query = query.Where(p => p.Category == category);
 
-        return await query
-            .OrderBy(p => p.Name)
-            .Select(p => new ProductListItemDto
+        var products = await query.OrderBy(p => p.Name).ToListAsync();
+
+        return products.Select(p => new ProductListItemDto
+        {
+            Id = p.Id,
+            SKU = p.SKU,
+            Name = p.Name,
+            Category = p.Category,
+            Supplier = p.Supplier,
+            Size = p.Size,
+            AcquiredValue = p.AcquiredValue,
+            Quantity = p.Variants.Any() ? p.Variants.Sum(v => v.Quantity) : p.Quantity,
+            MinStock = p.MinStock,
+            Variants = p.Variants.Select(v => new ProductVariantDto
             {
-                Id = p.Id,
-                SKU = p.SKU,
-                Name = p.Name,
-                Category = p.Category,
-                Supplier = p.Supplier,
-                Size = p.Size,
-                AcquiredValue = p.AcquiredValue,
-                Quantity = p.Quantity,
-                MinStock = p.MinStock
-            })
-            .ToListAsync();
+                Id = v.Id,
+                Size = v.Size,
+                Color = v.Color,
+                SKU = v.SKU,
+                Quantity = v.Quantity
+            }).ToList()
+        }).ToList();
     }
 
     public async Task<ProductDto?> GetByIdAsync(Guid id, Guid tenantId)
     {
-        var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId);
+        var product = await _context.Products
+            .Include(p => p.Variants)
+            .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId);
         return product == null ? null : MapToDto(product);
     }
 
@@ -63,12 +74,27 @@ public class ProductService : IProductService
             SKU = request.SKU,
             Name = request.Name,
             AcquiredValue = request.AcquiredValue,
-            Quantity = request.Quantity,
+            Quantity = request.Variants?.Count > 0 ? 0 : request.Quantity,
             MinStock = request.MinStock,
             Category = request.Category,
             Supplier = request.Supplier,
             Size = request.Size
         };
+
+        if (request.Variants?.Count > 0)
+        {
+            foreach (var v in request.Variants)
+            {
+                product.Variants.Add(new ProductVariant
+                {
+                    TenantId = tenantId,
+                    Size = v.Size,
+                    Color = v.Color,
+                    SKU = v.SKU,
+                    Quantity = v.Quantity
+                });
+            }
+        }
 
         _context.Products.Add(product);
         await _context.SaveChangesAsync();
@@ -78,18 +104,75 @@ public class ProductService : IProductService
 
     public async Task<ProductDto> UpdateAsync(Guid id, UpdateProductRequest request, Guid tenantId)
     {
-        var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId);
+        var product = await _context.Products
+            .Include(p => p.Variants)
+            .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId);
         if (product == null)
             throw new KeyNotFoundException("Produto não encontrado");
 
-        if (!string.IsNullOrEmpty(request.SKU)) product.SKU = request.SKU;
+        if (request.SKU != null) product.SKU = request.SKU;
         if (!string.IsNullOrEmpty(request.Name)) product.Name = request.Name;
         if (request.AcquiredValue.HasValue) product.AcquiredValue = request.AcquiredValue.Value;
-        if (request.Quantity.HasValue) product.Quantity = request.Quantity.Value;
         if (request.MinStock.HasValue) product.MinStock = request.MinStock.Value;
-        product.Category = request.Category ?? product.Category;
-        product.Supplier = request.Supplier ?? product.Supplier;
-        product.Size = request.Size ?? product.Size;
+        if (request.Category != null) product.Category = request.Category;
+        if (request.Supplier != null) product.Supplier = request.Supplier;
+        if (request.Size != null) product.Size = request.Size;
+
+        if (request.Variants != null)
+        {
+            var incomingIds = request.Variants
+                .Where(v => v.Id.HasValue)
+                .Select(v => v.Id!.Value)
+                .ToHashSet();
+
+            // Remove variants not in the incoming list (only if they have no transactions)
+            foreach (var existing in product.Variants.ToList())
+            {
+                if (!incomingIds.Contains(existing.Id))
+                {
+                    var hasTransactions = await _context.Transactions.AnyAsync(t => t.VariantId == existing.Id);
+                    if (!hasTransactions)
+                        _context.ProductVariants.Remove(existing);
+                }
+            }
+
+            // Update existing or create new
+            foreach (var v in request.Variants)
+            {
+                if (v.Id.HasValue)
+                {
+                    var existing = product.Variants.FirstOrDefault(pv => pv.Id == v.Id.Value);
+                    if (existing != null)
+                    {
+                        existing.Size = v.Size;
+                        existing.Color = v.Color;
+                        existing.SKU = v.SKU;
+                        existing.Quantity = v.Quantity;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    product.Variants.Add(new ProductVariant
+                    {
+                        TenantId = tenantId,
+                        Size = v.Size,
+                        Color = v.Color,
+                        SKU = v.SKU,
+                        Quantity = v.Quantity
+                    });
+                }
+            }
+
+            // If product now has variants, zero out the product-level quantity
+            if (product.Variants.Any())
+                product.Quantity = 0;
+        }
+        else if (request.Quantity.HasValue && !product.Variants.Any())
+        {
+            product.Quantity = request.Quantity.Value;
+        }
+
         product.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -108,9 +191,16 @@ public class ProductService : IProductService
 
     public async Task<List<ProductListItemDto>> GetLowStockAsync(Guid tenantId)
     {
-        return await _context.Products
-            .Where(p => p.TenantId == tenantId && p.Quantity <= p.MinStock)
+        var products = await _context.Products
+            .Include(p => p.Variants)
+            .Where(p => p.TenantId == tenantId)
             .OrderBy(p => p.Quantity)
+            .ToListAsync();
+
+        return products
+            .Where(p => p.Variants.Any()
+                ? p.Variants.Any(v => v.Quantity <= p.MinStock)
+                : p.Quantity <= p.MinStock)
             .Select(p => new ProductListItemDto
             {
                 Id = p.Id,
@@ -120,10 +210,18 @@ public class ProductService : IProductService
                 Supplier = p.Supplier,
                 Size = p.Size,
                 AcquiredValue = p.AcquiredValue,
-                Quantity = p.Quantity,
-                MinStock = p.MinStock
+                Quantity = p.Variants.Any() ? p.Variants.Sum(v => v.Quantity) : p.Quantity,
+                MinStock = p.MinStock,
+                Variants = p.Variants.Select(v => new ProductVariantDto
+                {
+                    Id = v.Id,
+                    Size = v.Size,
+                    Color = v.Color,
+                    SKU = v.SKU,
+                    Quantity = v.Quantity
+                }).ToList()
             })
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task<bool> IsSkuUniqueAsync(string sku, Guid tenantId, Guid? excludeId = null)
@@ -140,11 +238,19 @@ public class ProductService : IProductService
         SKU = product.SKU,
         Name = product.Name,
         AcquiredValue = product.AcquiredValue,
-        Quantity = product.Quantity,
+        Quantity = product.Variants.Any() ? product.Variants.Sum(v => v.Quantity) : product.Quantity,
         MinStock = product.MinStock,
         Category = product.Category,
         Supplier = product.Supplier,
         Size = product.Size,
+        Variants = product.Variants.Select(v => new ProductVariantDto
+        {
+            Id = v.Id,
+            Size = v.Size,
+            Color = v.Color,
+            SKU = v.SKU,
+            Quantity = v.Quantity
+        }).ToList(),
         CreatedAt = product.CreatedAt,
         UpdatedAt = product.UpdatedAt
     };

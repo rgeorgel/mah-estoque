@@ -61,7 +61,7 @@ public class ProductsController : ControllerBase
 
         var tenantId = User.GetTenantId();
 
-        if (!await _productService.IsSkuUniqueAsync(request.SKU, tenantId))
+        if (!string.IsNullOrEmpty(request.SKU) && !await _productService.IsSkuUniqueAsync(request.SKU, tenantId))
             return BadRequest(new { message = "SKU já está em uso" });
 
         var product = await _productService.CreateAsync(request, tenantId);

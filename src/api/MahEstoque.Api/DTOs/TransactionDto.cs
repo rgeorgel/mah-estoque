@@ -7,6 +7,8 @@ public class CreateTransactionRequest
     [Required]
     public Guid ProductId { get; set; }
 
+    public Guid? VariantId { get; set; }
+
     [Required]
     public string Type { get; set; } = string.Empty;
 
@@ -32,8 +34,12 @@ public class TransactionDto
     public Guid Id { get; set; }
     public Guid ProductId { get; set; }
     public string ProductName { get; set; } = string.Empty;
-    public string ProductSKU { get; set; } = string.Empty;
+    public string? ProductSKU { get; set; }
     public string? ProductSize { get; set; }
+    public Guid? VariantId { get; set; }
+    public string? VariantSize { get; set; }
+    public string? VariantColor { get; set; }
+    public string? VariantSKU { get; set; }
     public string Type { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public decimal UnitValue { get; set; }

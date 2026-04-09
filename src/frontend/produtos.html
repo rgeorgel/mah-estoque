@@ -5,6 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Produtos - Mah Estoque</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .variants-section {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .variants-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #475569;
+            font-weight: 600;
+        }
+        .variant-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 80px 32px;
+            gap: 6px;
+            margin-bottom: 6px;
+            align-items: center;
+        }
+        .variant-row input {
+            padding: 6px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .variant-row input:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+        .btn-remove-variant {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #fee2e2;
+            color: #dc2626;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-remove-variant:hover { background: #fecaca; }
+        .variant-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 80px 32px;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .variant-header span {
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .btn-add-variant {
+            width: 100%;
+            padding: 6px;
+            border: 1px dashed #cbd5e1;
+            background: transparent;
+            color: #64748b;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+        .btn-add-variant:hover { background: #f8fafc; border-color: #6366f1; color: #6366f1; }
+        .variant-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .variant-chip {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: #e0e7ff;
+            color: #4338ca;
+            white-space: nowrap;
+        }
+        .variant-chip.low { background: #fee2e2; color: #dc2626; }
+    </style>
 </head>
 <body>
     <header class="header">
@@ -50,9 +133,8 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>SKU</th>
                             <th>Nome</th>
-                            <th>Tamanho</th>
+                            <th>Variações / Tamanho</th>
                             <th>Categoria</th>
                             <th>Fornecedor</th>
                             <th>Valor Custo</th>
@@ -78,16 +160,12 @@
             <form id="productForm">
                 <input type="hidden" id="productId">
                 <div class="form-group">
-                    <label for="sku">SKU</label>
-                    <input type="text" id="sku" required>
+                    <label for="sku">SKU do produto (opcional)</label>
+                    <input type="text" id="sku">
                 </div>
                 <div class="form-group">
                     <label for="name">Nome</label>
                     <input type="text" id="name" required>
-                </div>
-                <div class="form-group">
-                    <label for="size">Tamanho (opcional)</label>
-                    <input type="text" id="size" placeholder="Ex: P, M, G, GG, 38, 40...">
                 </div>
                 <div class="form-group">
                     <label for="category">Categoria (opcional)</label>
@@ -102,13 +180,28 @@
                     <input type="number" id="acquiredValue" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label for="quantity">Quantidade</label>
-                    <input type="number" id="quantity" required min="0">
-                </div>
-                <div class="form-group">
                     <label for="minStock">Estoque Mínimo</label>
                     <input type="number" id="minStock" required min="0" value="5">
                 </div>
+
+                <div class="variants-section">
+                    <h4>Variações (tamanho / cor)</h4>
+                    <div class="variant-header">
+                        <span>Tamanho</span>
+                        <span>Cor</span>
+                        <span>SKU</span>
+                        <span>Qtd</span>
+                        <span></span>
+                    </div>
+                    <div id="variantsList"></div>
+                    <button type="button" class="btn-add-variant" onclick="addVariantRow()">+ Adicionar variação</button>
+                </div>
+
+                <div class="form-group" id="quantityGroup">
+                    <label for="quantity">Quantidade</label>
+                    <input type="number" id="quantity" min="0" value="0">
+                </div>
+
                 <div id="modalError" class="alert alert-danger hidden"></div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
@@ -161,6 +254,17 @@
             }
         }
 
+        function renderVariants(p) {
+            if (p.variants && p.variants.length > 0) {
+                return `<div class="variant-chips">${p.variants.map(v => {
+                    const label = [v.size, v.color].filter(Boolean).join('/') || 'Sem nome';
+                    const isLow = v.quantity <= p.minStock;
+                    return `<span class="variant-chip ${isLow ? 'low' : ''}" title="Qtd: ${v.quantity}">${label} (${v.quantity})</span>`;
+                }).join('')}</div>`;
+            }
+            return p.size || '-';
+        }
+
         function renderProducts(data) {
             const tbody = document.getElementById('productsTable');
             const emptyState = document.getElementById('emptyState');
@@ -172,25 +276,29 @@
             }
 
             emptyState.classList.add('hidden');
-            tbody.innerHTML = data.map(p => `
+            tbody.innerHTML = data.map(p => {
+                const totalQty = p.variants && p.variants.length > 0
+                    ? p.variants.reduce((s, v) => s + v.quantity, 0)
+                    : p.quantity;
+                const isLow = totalQty <= p.minStock;
+                return `
                 <tr>
-                    <td>${p.sku}</td>
-                    <td>${p.name}</td>
-                    <td>${p.size || '-'}</td>
+                    <td><strong>${p.name}</strong>${p.sku ? `<br><small style="color:#94a3b8">${p.sku}</small>` : ''}</td>
+                    <td>${renderVariants(p)}</td>
                     <td>${p.category || '-'}</td>
                     <td>${p.supplier || '-'}</td>
                     <td>${formatCurrency(p.acquiredValue)}</td>
                     <td>
-                        <span class="badge ${p.quantity <= p.minStock ? 'badge-danger' : 'badge-success'}">
-                            ${p.quantity}
+                        <span class="badge ${isLow ? 'badge-danger' : 'badge-success'}">
+                            ${totalQty}
                         </span>
                     </td>
                     <td class="actions">
                         <button class="btn btn-sm btn-secondary" onclick="editProduct('${p.id}')">Editar</button>
                         <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Excluir</button>
                     </td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
         }
 
         function updateCategoryFilter() {
@@ -204,7 +312,7 @@
             const search = e.target.value.toLowerCase();
             const category = document.getElementById('categoryFilter').value;
             const filtered = products.filter(p => {
-                const matchSearch = p.name.toLowerCase().includes(search) || p.sku.toLowerCase().includes(search);
+                const matchSearch = p.name.toLowerCase().includes(search) || (p.sku || '').toLowerCase().includes(search);
                 const matchCategory = !category || p.category === category;
                 return matchSearch && matchCategory;
             });
@@ -215,18 +323,64 @@
             document.getElementById('searchInput').dispatchEvent(new Event('input'));
         });
 
+        // --- Variant rows ---
+
+        function addVariantRow(variant = null) {
+            const row = document.createElement('div');
+            row.className = 'variant-row';
+            row.innerHTML = `
+                <input type="hidden" class="variant-id" value="${variant ? variant.id : ''}">
+                <input type="text" class="variant-size" placeholder="Ex: P, M, G" value="${variant ? (variant.size || '') : ''}">
+                <input type="text" class="variant-color" placeholder="Ex: Azul" value="${variant ? (variant.color || '') : ''}">
+                <input type="text" class="variant-sku" placeholder="SKU (opcional)" value="${variant ? (variant.sku || '') : ''}">
+                <input type="number" class="variant-qty" placeholder="0" value="${variant ? variant.quantity : 0}" min="0">
+                <button type="button" class="btn-remove-variant" onclick="removeVariant(this)" title="Remover">×</button>
+            `;
+            document.getElementById('variantsList').appendChild(row);
+            updateQuantityVisibility();
+        }
+
+        function removeVariant(btn) {
+            btn.closest('.variant-row').remove();
+            updateQuantityVisibility();
+        }
+
+        function updateQuantityVisibility() {
+            const hasVariants = document.querySelectorAll('#variantsList .variant-row').length > 0;
+            document.getElementById('quantityGroup').style.display = hasVariants ? 'none' : 'block';
+        }
+
+        function getVariants() {
+            return Array.from(document.querySelectorAll('#variantsList .variant-row')).map(row => ({
+                id: row.querySelector('.variant-id').value || undefined,
+                size: row.querySelector('.variant-size').value || null,
+                color: row.querySelector('.variant-color').value || null,
+                sku: row.querySelector('.variant-sku').value || null,
+                quantity: parseInt(row.querySelector('.variant-qty').value) || 0
+            }));
+        }
+
+        // --- Modal ---
+
         function openModal(product = null) {
             document.getElementById('modalTitle').textContent = product ? 'Editar Produto' : 'Novo Produto';
             document.getElementById('productId').value = product ? product.id : '';
-            document.getElementById('sku').value = product ? product.sku : '';
-            document.getElementById('name').value = product ? product.name : '';
-            document.getElementById('size').value = product?.size || '';
+            document.getElementById('sku').value = product?.sku || '';
+            document.getElementById('name').value = product?.name || '';
             document.getElementById('category').value = product?.category || '';
             document.getElementById('supplier').value = product?.supplier || '';
             document.getElementById('acquiredValue').value = product ? product.acquiredValue : '';
-            document.getElementById('quantity').value = product ? product.quantity : '';
+            document.getElementById('quantity').value = product ? product.quantity : '0';
             document.getElementById('minStock').value = product ? product.minStock : '5';
             document.getElementById('modalError').classList.add('hidden');
+
+            // Clear and repopulate variants
+            document.getElementById('variantsList').innerHTML = '';
+            if (product?.variants?.length > 0) {
+                product.variants.forEach(v => addVariantRow(v));
+            }
+            updateQuantityVisibility();
+
             document.getElementById('productModal').classList.add('active');
         }
 
@@ -257,16 +411,22 @@
             errorMsg.classList.add('hidden');
 
             const id = document.getElementById('productId').value;
+            const variants = getVariants();
+            const hasVariants = variants.length > 0;
+
             const data = {
-                sku: document.getElementById('sku').value,
+                sku: document.getElementById('sku').value || null,
                 name: document.getElementById('name').value,
-                size: document.getElementById('size').value || null,
                 category: document.getElementById('category').value || null,
                 supplier: document.getElementById('supplier').value || null,
                 acquiredValue: parseFloat(document.getElementById('acquiredValue').value),
-                quantity: parseInt(document.getElementById('quantity').value),
-                minStock: parseInt(document.getElementById('minStock').value)
+                minStock: parseInt(document.getElementById('minStock').value),
+                variants: hasVariants ? variants : []
             };
+
+            if (!hasVariants) {
+                data.quantity = parseInt(document.getElementById('quantity').value) || 0;
+            }
 
             try {
                 if (id) {

@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -43,7 +44,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.SKU).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.SKU).HasMaxLength(50);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
             entity.Property(e => e.Category).HasMaxLength(100);
             entity.Property(e => e.Supplier).HasMaxLength(100);
@@ -58,6 +59,29 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => e.TenantId);
             entity.HasIndex(e => e.SKU).IsUnique();
+        });
+
+        modelBuilder.Entity<ProductVariant>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Size).HasMaxLength(50);
+            entity.Property(e => e.Color).HasMaxLength(50);
+            entity.Property(e => e.SKU).HasMaxLength(50);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(e => e.Product)
+                .WithMany(p => p.Variants)
+                .HasForeignKey(e => e.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.ProductId);
+            entity.HasIndex(e => e.TenantId);
         });
 
         modelBuilder.Entity<Transaction>(entity =>
@@ -75,6 +99,12 @@ public class AppDbContext : DbContext
                 .WithMany(p => p.Transactions)
                 .HasForeignKey(e => e.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Variant)
+                .WithMany(v => v.Transactions)
+                .HasForeignKey(e => e.VariantId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(e => e.TenantId);
             entity.HasIndex(e => e.ProductId);
