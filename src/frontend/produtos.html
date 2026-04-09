@@ -11,6 +11,7 @@
             border-radius: 8px;
             padding: 12px;
             margin-bottom: 12px;
+            overflow-x: hidden;
         }
         .variants-section h4 {
             margin: 0 0 10px 0;
@@ -20,7 +21,7 @@
         }
         .variant-row {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 80px 32px;
+            grid-template-columns: 1fr 1fr 1fr 70px 32px;
             gap: 6px;
             margin-bottom: 6px;
             align-items: center;
@@ -30,6 +31,7 @@
             border: 1px solid #cbd5e1;
             border-radius: 6px;
             font-size: 13px;
+            min-width: 0;
         }
         .variant-row input:focus {
             outline: none;
@@ -47,11 +49,12 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
         .btn-remove-variant:hover { background: #fecaca; }
         .variant-header {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 80px 32px;
+            grid-template-columns: 1fr 1fr 1fr 70px 32px;
             gap: 6px;
             margin-bottom: 4px;
         }
@@ -60,6 +63,31 @@
             color: #94a3b8;
             font-weight: 600;
             text-transform: uppercase;
+        }
+        @media (max-width: 520px) {
+            .variant-header { display: none; }
+            .variant-row {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 8px;
+                gap: 6px;
+                position: relative;
+            }
+            .variant-row .variant-size { grid-column: 1; }
+            .variant-row .variant-color { grid-column: 2; }
+            .variant-row .variant-sku { grid-column: 1; }
+            .variant-row .variant-qty { grid-column: 2; }
+            .variant-row .btn-remove-variant {
+                position: absolute;
+                top: 6px;
+                right: 6px;
+                width: 24px;
+                height: 24px;
+                font-size: 14px;
+            }
+            .variant-row input[type="hidden"] { display: none; }
         }
         .btn-add-variant {
             width: 100%;
