@@ -12,6 +12,8 @@ services:
       - ConnectionStrings__DefaultConnection=Host=db;Database=mahestoque;Username=postgres;Password=${DB_PASSWORD:-postgres123}
       - Jwt__Secret=${JWT_SECRET:-MahEstoqueSecretKey2026VeryLongAndSecure!}
       - Jwt__ExpirationHours=24
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_started
@@ -52,3 +54,4 @@ networks:
 
 volumes:
   pgdata:
+  uploads:

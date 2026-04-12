@@ -29,6 +29,8 @@ public class ProductService : IProductService
     {
         var query = _context.Products
             .Include(p => p.Variants)
+            .Include(p => p.Images)
+            .AsSplitQuery()
             .Where(p => p.TenantId == tenantId);
 
         if (!string.IsNullOrEmpty(category))
@@ -36,32 +38,15 @@ public class ProductService : IProductService
 
         var products = await query.OrderBy(p => p.Name).ToListAsync();
 
-        return products.Select(p => new ProductListItemDto
-        {
-            Id = p.Id,
-            SKU = p.SKU,
-            Name = p.Name,
-            Category = p.Category,
-            Supplier = p.Supplier,
-            Size = p.Size,
-            AcquiredValue = p.AcquiredValue,
-            Quantity = p.Variants.Any() ? p.Variants.Sum(v => v.Quantity) : p.Quantity,
-            MinStock = p.MinStock,
-            Variants = p.Variants.Select(v => new ProductVariantDto
-            {
-                Id = v.Id,
-                Size = v.Size,
-                Color = v.Color,
-                SKU = v.SKU,
-                Quantity = v.Quantity
-            }).ToList()
-        }).ToList();
+        return products.Select(p => MapToListItemDto(p)).ToList();
     }
 
     public async Task<ProductDto?> GetByIdAsync(Guid id, Guid tenantId)
     {
         var product = await _context.Products
             .Include(p => p.Variants)
+            .Include(p => p.Images)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId);
         return product == null ? null : MapToDto(product);
     }
@@ -78,7 +63,11 @@ public class ProductService : IProductService
             MinStock = request.MinStock,
             Category = request.Category,
             Supplier = request.Supplier,
-            Size = request.Size
+            Size = request.Size,
+            Description = request.Description,
+            SalePrice = request.SalePrice,
+            SalePriceDiscount = request.SalePriceDiscount,
+            IsVisible = request.IsVisible
         };
 
         if (request.Variants?.Count > 0)
@@ -104,20 +93,23 @@ public class ProductService : IProductService
 
     public async Task<ProductDto> UpdateAsync(Guid id, UpdateProductRequest request, Guid tenantId)
     {
+        // Load only Variants here — no Images Include.
+        // Including two collections (Variants + Images) while tracking causes EF Core 10
+        // to emit a split query that appends the parent "Id" column to the child result set.
+        // The duplicate "Id" column breaks the change-tracker's PK mapping, so the
+        // variant UPDATEs end up using the product's Id in the WHERE clause → 0 rows affected.
+        // Images are not needed for the update operation; they have their own endpoints.
         var product = await _context.Products
             .Include(p => p.Variants)
             .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId);
         if (product == null)
             throw new KeyNotFoundException("Produto não encontrado");
 
-        if (request.SKU != null) product.SKU = request.SKU;
-        if (!string.IsNullOrEmpty(request.Name)) product.Name = request.Name;
-        if (request.AcquiredValue.HasValue) product.AcquiredValue = request.AcquiredValue.Value;
-        if (request.MinStock.HasValue) product.MinStock = request.MinStock.Value;
-        if (request.Category != null) product.Category = request.Category;
-        if (request.Supplier != null) product.Supplier = request.Supplier;
-        if (request.Size != null) product.Size = request.Size;
-
+        // ── Phase 1: variant changes only ──────────────────────────────────────
+        // We intentionally do NOT modify any Product columns here so that the
+        // first SaveChangesAsync sends only ProductVariant statements.  Mixing
+        // variant UPDATEs with the product UPDATE in a single Npgsql batch caused
+        // the product row to report 0 rows affected (DbUpdateConcurrencyException).
         if (request.Variants != null)
         {
             var incomingIds = request.Variants
@@ -153,8 +145,16 @@ public class ProductService : IProductService
                 }
                 else
                 {
-                    product.Variants.Add(new ProductVariant
+                    // Use _context.ProductVariants.Add() instead of product.Variants.Add().
+                    // ProductVariant.Id has a = Guid.NewGuid() initializer, so the key is
+                    // non-empty (non-sentinel) when the object is constructed.  When added
+                    // via a navigation collection on an already-tracked parent, EF Core's
+                    // relationship fixup sees a "manually assigned" key and tracks the entity
+                    // as Modified instead of Added → UPDATE against a non-existent row → 0 rows.
+                    // DbSet.Add() always forces the Added state regardless of the key value.
+                    _context.ProductVariants.Add(new ProductVariant
                     {
+                        ProductId = product.Id,
                         TenantId = tenantId,
                         Size = v.Size,
                         Color = v.Color,
@@ -163,10 +163,32 @@ public class ProductService : IProductService
                     });
                 }
             }
+        }
 
-            // If product now has variants, zero out the product-level quantity
-            if (product.Variants.Any())
-                product.Quantity = 0;
+        // Save variant changes in their own batch (no product changes yet).
+        // Harmless no-op if there are no variant changes.
+        await _context.SaveChangesAsync();
+
+        // ── Phase 2: product property changes ─────────────────────────────────
+        // After the variant save, the Product entity is still Unchanged.
+        // Now we modify it so the second SaveChangesAsync sends only the
+        // product UPDATE — a clean, single-statement batch that always works.
+        if (request.SKU != null) product.SKU = request.SKU;
+        if (!string.IsNullOrEmpty(request.Name)) product.Name = request.Name;
+        if (request.AcquiredValue.HasValue) product.AcquiredValue = request.AcquiredValue.Value;
+        if (request.MinStock.HasValue) product.MinStock = request.MinStock.Value;
+        if (request.Category != null) product.Category = request.Category;
+        if (request.Supplier != null) product.Supplier = request.Supplier;
+        if (request.Size != null) product.Size = request.Size;
+        if (request.Description != null) product.Description = request.Description;
+        if (request.SalePrice.HasValue) product.SalePrice = request.SalePrice;
+        if (request.SalePriceDiscount.HasValue) product.SalePriceDiscount = request.SalePriceDiscount;
+        if (request.IsVisible.HasValue) product.IsVisible = request.IsVisible.Value;
+
+        // After phase-1 save, product.Variants reflects the final persisted state.
+        if (request.Variants != null)
+        {
+            product.Quantity = product.Variants.Any() ? 0 : product.Quantity;
         }
         else if (request.Quantity.HasValue && !product.Variants.Any())
         {
@@ -193,6 +215,8 @@ public class ProductService : IProductService
     {
         var products = await _context.Products
             .Include(p => p.Variants)
+            .Include(p => p.Images)
+            .AsSplitQuery()
             .Where(p => p.TenantId == tenantId)
             .OrderBy(p => p.Quantity)
             .ToListAsync();
@@ -201,26 +225,7 @@ public class ProductService : IProductService
             .Where(p => p.Variants.Any()
                 ? p.Variants.Any(v => v.Quantity <= p.MinStock)
                 : p.Quantity <= p.MinStock)
-            .Select(p => new ProductListItemDto
-            {
-                Id = p.Id,
-                SKU = p.SKU,
-                Name = p.Name,
-                Category = p.Category,
-                Supplier = p.Supplier,
-                Size = p.Size,
-                AcquiredValue = p.AcquiredValue,
-                Quantity = p.Variants.Any() ? p.Variants.Sum(v => v.Quantity) : p.Quantity,
-                MinStock = p.MinStock,
-                Variants = p.Variants.Select(v => new ProductVariantDto
-                {
-                    Id = v.Id,
-                    Size = v.Size,
-                    Color = v.Color,
-                    SKU = v.SKU,
-                    Quantity = v.Quantity
-                }).ToList()
-            })
+            .Select(p => MapToListItemDto(p))
             .ToList();
     }
 
@@ -243,6 +248,10 @@ public class ProductService : IProductService
         Category = product.Category,
         Supplier = product.Supplier,
         Size = product.Size,
+        Description = product.Description,
+        SalePrice = product.SalePrice,
+        SalePriceDiscount = product.SalePriceDiscount,
+        IsVisible = product.IsVisible,
         Variants = product.Variants.Select(v => new ProductVariantDto
         {
             Id = v.Id,
@@ -251,7 +260,46 @@ public class ProductService : IProductService
             SKU = v.SKU,
             Quantity = v.Quantity
         }).ToList(),
+        Images = product.Images.OrderBy(i => i.DisplayOrder).Select(i => new ProductImageDto
+        {
+            Id = i.Id,
+            Url = $"/uploads/{i.StoredPath}",
+            IsPrimary = i.IsPrimary,
+            DisplayOrder = i.DisplayOrder
+        }).ToList(),
         CreatedAt = product.CreatedAt,
         UpdatedAt = product.UpdatedAt
+    };
+
+    private static ProductListItemDto MapToListItemDto(Product product) => new()
+    {
+        Id = product.Id,
+        SKU = product.SKU,
+        Name = product.Name,
+        Category = product.Category,
+        Supplier = product.Supplier,
+        Size = product.Size,
+        Description = product.Description,
+        AcquiredValue = product.AcquiredValue,
+        SalePrice = product.SalePrice,
+        SalePriceDiscount = product.SalePriceDiscount,
+        IsVisible = product.IsVisible,
+        Quantity = product.Variants.Any() ? product.Variants.Sum(v => v.Quantity) : product.Quantity,
+        MinStock = product.MinStock,
+        Variants = product.Variants.Select(v => new ProductVariantDto
+        {
+            Id = v.Id,
+            Size = v.Size,
+            Color = v.Color,
+            SKU = v.SKU,
+            Quantity = v.Quantity
+        }).ToList(),
+        Images = product.Images.OrderBy(i => i.DisplayOrder).Select(i => new ProductImageDto
+        {
+            Id = i.Id,
+            Url = $"/uploads/{i.StoredPath}",
+            IsPrimary = i.IsPrimary,
+            DisplayOrder = i.DisplayOrder
+        }).ToList()
     };
 }

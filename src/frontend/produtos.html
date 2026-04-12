@@ -115,6 +115,119 @@
             white-space: nowrap;
         }
         .variant-chip.low { background: #fee2e2; color: #dc2626; }
+
+        /* Catalog fields */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
+
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+        }
+        .toggle-label { font-size: 14px; color: #374151; font-weight: 500; }
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute;
+            inset: 0;
+            background: #cbd5e1;
+            border-radius: 24px;
+            cursor: pointer;
+            transition: background .2s;
+        }
+        .toggle-slider:before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            left: 3px;
+            top: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: transform .2s;
+        }
+        .toggle input:checked + .toggle-slider { background: #6366f1; }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+        /* Image upload */
+        .images-section {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .images-section h4 { margin: 0 0 10px 0; font-size: 14px; color: #475569; font-weight: 600; }
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .2s, background .2s;
+            margin-bottom: 10px;
+        }
+        .upload-area:hover { border-color: #6366f1; background: #f8f7ff; }
+        .upload-area p { margin: 0; font-size: 13px; color: #64748b; }
+        .upload-area small { color: #94a3b8; font-size: 11px; }
+        .image-previews {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .image-preview-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #e2e8f0;
+        }
+        .image-preview-item.primary { border-color: #6366f1; }
+        .image-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+        .image-preview-actions {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        .image-preview-item:hover .image-preview-actions { display: flex; }
+        .image-preview-actions button {
+            border: none;
+            border-radius: 4px;
+            font-size: 10px;
+            padding: 2px 6px;
+            cursor: pointer;
+            width: 60px;
+        }
+        .btn-set-primary { background: #6366f1; color: white; }
+        .btn-delete-img { background: #dc2626; color: white; }
+        .primary-badge {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            background: #6366f1;
+            color: white;
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+        .badge-visible { background: #d1fae5; color: #065f46; }
+        .badge-hidden { background: #f1f5f9; color: #64748b; }
     </style>
 </head>
 <body>
@@ -129,9 +242,11 @@
             <nav class="nav-links" id="navLinks">
                 <a href="dashboard.html" class="nav-link">Dashboard</a>
                 <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="pedidos.html" class="nav-link" id="pedidosLink">Pedidos</a>
                 <a href="vendas.html" class="nav-link">Vendas</a>
                 <a href="relatorios.html" class="nav-link">Relatórios</a>
                 <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+                <a href="configuracoes.html" class="nav-link" id="configLink">Configurações</a>
             </nav>
             <div class="user-menu">
                 <span class="user-info" id="userName"></span>
@@ -164,9 +279,10 @@
                             <th>Nome</th>
                             <th>Variações / Tamanho</th>
                             <th>Categoria</th>
-                            <th>Fornecedor</th>
                             <th>Valor Custo</th>
+                            <th>Preço Venda</th>
                             <th>Quantidade</th>
+                            <th>Catálogo</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -187,29 +303,58 @@
             </div>
             <form id="productForm">
                 <input type="hidden" id="productId">
-                <div class="form-group">
-                    <label for="sku">SKU do produto (opcional)</label>
-                    <input type="text" id="sku">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="sku">SKU (opcional)</label>
+                        <input type="text" id="sku">
+                    </div>
+                    <div class="form-group">
+                        <label for="category">Categoria</label>
+                        <input type="text" id="category">
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="name">Nome</label>
                     <input type="text" id="name" required>
                 </div>
                 <div class="form-group">
-                    <label for="category">Categoria (opcional)</label>
-                    <input type="text" id="category">
+                    <label for="description">Descrição (visível no catálogo)</label>
+                    <textarea id="description" rows="2" style="resize:vertical"></textarea>
                 </div>
-                <div class="form-group">
-                    <label for="supplier">Fornecedor (opcional)</label>
-                    <input type="text" id="supplier">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="supplier">Fornecedor</label>
+                        <input type="text" id="supplier">
+                    </div>
+                    <div class="form-group">
+                        <label for="minStock">Estoque Mínimo</label>
+                        <input type="number" id="minStock" required min="0" value="5">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="acquiredValue">Valor de Aquisição</label>
-                    <input type="number" id="acquiredValue" step="0.01" required>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="acquiredValue">Valor de Aquisição</label>
+                        <input type="number" id="acquiredValue" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="salePrice">Preço de Venda</label>
+                        <input type="number" id="salePrice" step="0.01" min="0" placeholder="0,00">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="minStock">Estoque Mínimo</label>
-                    <input type="number" id="minStock" required min="0" value="5">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="salePriceDiscount">Preço com Desconto</label>
+                        <input type="number" id="salePriceDiscount" step="0.01" min="0" placeholder="0,00">
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:2px">
+                        <div class="toggle-group">
+                            <label class="toggle">
+                                <input type="checkbox" id="isVisible">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-label">Visível no catálogo</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="variants-section">
@@ -228,6 +373,16 @@
                 <div class="form-group" id="quantityGroup">
                     <label for="quantity">Quantidade</label>
                     <input type="number" id="quantity" min="0" value="0">
+                </div>
+
+                <div class="images-section">
+                    <h4>Imagens do produto</h4>
+                    <div class="image-previews" id="imagePreviews"></div>
+                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('imageInput').click()">
+                        <p>Clique para adicionar imagem</p>
+                        <small>JPEG, PNG ou WebP — máx. 5MB por imagem</small>
+                    </div>
+                    <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" multiple style="display:none">
                 </div>
 
                 <div id="modalError" class="alert alert-danger hidden"></div>
@@ -267,6 +422,7 @@
 
         if (!checkRole(['Admin'])) {
             document.getElementById('usersLink').style.display = 'none';
+            document.getElementById('configLink').style.display = 'none';
         }
 
         let products = [];
@@ -309,16 +465,24 @@
                     ? p.variants.reduce((s, v) => s + v.quantity, 0)
                     : p.quantity;
                 const isLow = totalQty <= p.minStock;
+                const priceHtml = p.salePriceDiscount
+                    ? `<span style="text-decoration:line-through;color:#94a3b8;font-size:12px">${formatCurrency(p.salePrice)}</span><br><strong style="color:#059669">${formatCurrency(p.salePriceDiscount)}</strong>`
+                    : p.salePrice ? formatCurrency(p.salePrice) : '-';
                 return `
                 <tr>
                     <td><strong>${p.name}</strong>${p.sku ? `<br><small style="color:#94a3b8">${p.sku}</small>` : ''}</td>
                     <td>${renderVariants(p)}</td>
                     <td>${p.category || '-'}</td>
-                    <td>${p.supplier || '-'}</td>
                     <td>${formatCurrency(p.acquiredValue)}</td>
+                    <td>${priceHtml}</td>
                     <td>
                         <span class="badge ${isLow ? 'badge-danger' : 'badge-success'}">
                             ${totalQty}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${p.isVisible ? 'badge-visible' : 'badge-hidden'}">
+                            ${p.isVisible ? 'Visível' : 'Oculto'}
                         </span>
                     </td>
                     <td class="actions">
@@ -390,6 +554,8 @@
 
         // --- Modal ---
 
+        let pendingImageFiles = [];
+
         function openModal(product = null) {
             document.getElementById('modalTitle').textContent = product ? 'Editar Produto' : 'Novo Produto';
             document.getElementById('productId').value = product ? product.id : '';
@@ -397,10 +563,15 @@
             document.getElementById('name').value = product?.name || '';
             document.getElementById('category').value = product?.category || '';
             document.getElementById('supplier').value = product?.supplier || '';
+            document.getElementById('description').value = product?.description || '';
             document.getElementById('acquiredValue').value = product ? product.acquiredValue : '';
             document.getElementById('quantity').value = product ? product.quantity : '0';
             document.getElementById('minStock').value = product ? product.minStock : '5';
+            document.getElementById('salePrice').value = product?.salePrice || '';
+            document.getElementById('salePriceDiscount').value = product?.salePriceDiscount || '';
+            document.getElementById('isVisible').checked = product?.isVisible || false;
             document.getElementById('modalError').classList.add('hidden');
+            pendingImageFiles = [];
 
             // Clear and repopulate variants
             document.getElementById('variantsList').innerHTML = '';
@@ -409,11 +580,15 @@
             }
             updateQuantityVisibility();
 
+            // Render existing images
+            renderImagePreviews(product?.images || []);
+
             document.getElementById('productModal').classList.add('active');
         }
 
         function closeModal() {
             document.getElementById('productModal').classList.remove('active');
+            pendingImageFiles = [];
         }
 
         function editProduct(id) {
@@ -433,6 +608,107 @@
             }
         }
 
+        // --- Image handling ---
+
+        function renderImagePreviews(images) {
+            const container = document.getElementById('imagePreviews');
+            container.innerHTML = images.map(img => `
+                <div class="image-preview-item ${img.isPrimary ? 'primary' : ''}" data-image-id="${img.id}">
+                    ${img.isPrimary ? '<span class="primary-badge">Principal</span>' : ''}
+                    <img src="${img.url}" alt="">
+                    <div class="image-preview-actions">
+                        ${!img.isPrimary ? `<button class="btn-set-primary" onclick="setPrimaryImage('${img.id}')">Principal</button>` : ''}
+                        <button class="btn-delete-img" onclick="deleteImage('${img.id}')">Remover</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function setPrimaryImage(imageId) {
+            const productId = document.getElementById('productId').value;
+            try {
+                await requestRaw(`/products/${productId}/images/${imageId}/set-primary`, { method: 'PUT' });
+                const product = await request(`/products/${productId}`);
+                renderImagePreviews(product.images || []);
+                // update local cache
+                const idx = products.findIndex(p => p.id === productId);
+                if (idx >= 0) products[idx] = product;
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function deleteImage(imageId) {
+            const productId = document.getElementById('productId').value;
+            try {
+                await requestRaw(`/products/${productId}/images/${imageId}`, { method: 'DELETE' });
+                const product = await request(`/products/${productId}`);
+                renderImagePreviews(product.images || []);
+                const idx = products.findIndex(p => p.id === productId);
+                if (idx >= 0) products[idx] = product;
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        document.getElementById('imageInput').addEventListener('change', async (e) => {
+            const productId = document.getElementById('productId').value;
+            const files = Array.from(e.target.files);
+            e.target.value = '';
+
+            if (!productId) {
+                // Product not yet created — queue for upload after save
+                pendingImageFiles.push(...files);
+                // Show local previews
+                const container = document.getElementById('imagePreviews');
+                for (const f of files) {
+                    const url = URL.createObjectURL(f);
+                    const div = document.createElement('div');
+                    div.className = 'image-preview-item';
+                    div.innerHTML = `<img src="${url}" alt=""><div class="image-preview-actions"><button class="btn-delete-img" onclick="removePendingPreview(this,'${url}')">Remover</button></div>`;
+                    container.appendChild(div);
+                }
+                return;
+            }
+
+            // Product exists — upload immediately
+            for (const file of files) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    await requestMultipart(`/products/${productId}/images`, formData);
+                } catch (err) {
+                    showToast(`Erro ao enviar ${file.name}: ${err.message}`, 'error');
+                }
+            }
+            const product = await request(`/products/${productId}`);
+            renderImagePreviews(product.images || []);
+            const idx = products.findIndex(p => p.id === productId);
+            if (idx >= 0) products[idx] = product;
+        });
+
+        function removePendingPreview(btn, url) {
+            const item = btn.closest('.image-preview-item');
+            pendingImageFiles = pendingImageFiles.filter((_, i) => {
+                const previews = document.querySelectorAll('#imagePreviews .image-preview-item');
+                return previews[i]?.querySelector('img')?.src !== url;
+            });
+            item.remove();
+        }
+
+        async function uploadPendingImages(productId) {
+            for (const file of pendingImageFiles) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    await requestMultipart(`/products/${productId}/images`, formData);
+                } catch (err) {
+                    showToast(`Erro ao enviar ${file.name}: ${err.message}`, 'error');
+                }
+            }
+            pendingImageFiles = [];
+        }
+
         document.getElementById('productForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const errorMsg = document.getElementById('modalError');
@@ -442,13 +718,20 @@
             const variants = getVariants();
             const hasVariants = variants.length > 0;
 
+            const salePriceVal = parseFloat(document.getElementById('salePrice').value);
+            const saleDiscountVal = parseFloat(document.getElementById('salePriceDiscount').value);
+
             const data = {
                 sku: document.getElementById('sku').value || null,
                 name: document.getElementById('name').value,
                 category: document.getElementById('category').value || null,
                 supplier: document.getElementById('supplier').value || null,
+                description: document.getElementById('description').value || null,
                 acquiredValue: parseFloat(document.getElementById('acquiredValue').value),
                 minStock: parseInt(document.getElementById('minStock').value),
+                salePrice: isNaN(salePriceVal) ? null : salePriceVal,
+                salePriceDiscount: isNaN(saleDiscountVal) ? null : saleDiscountVal,
+                isVisible: document.getElementById('isVisible').checked,
                 variants: hasVariants ? variants : []
             };
 
@@ -457,6 +740,7 @@
             }
 
             try {
+                let savedId = id;
                 if (id) {
                     await request(`/products/${id}`, {
                         method: 'PUT',
@@ -464,11 +748,15 @@
                     });
                     showToast('Produto atualizado com sucesso');
                 } else {
-                    await request('/products', {
+                    const created = await request('/products', {
                         method: 'POST',
                         body: JSON.stringify(data)
                     });
+                    savedId = created.id;
                     showToast('Produto criado com sucesso');
+                }
+                if (pendingImageFiles.length > 0) {
+                    await uploadPendingImages(savedId);
                 }
                 closeModal();
                 loadProducts();

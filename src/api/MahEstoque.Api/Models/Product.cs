@@ -37,6 +37,16 @@ public class Product
     [MaxLength(50)]
     public string? Size { get; set; }
 
+    public string? Description { get; set; }
+
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal? SalePrice { get; set; }
+
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal? SalePriceDiscount { get; set; }
+
+    public bool IsVisible { get; set; } = false;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -44,4 +54,6 @@ public class Product
     public ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 
     public ICollection<ProductVariant> Variants { get; set; } = new List<ProductVariant>();
+
+    public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
 }

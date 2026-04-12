@@ -12,6 +12,12 @@ public class Tenant
     [MaxLength(255)]
     public string Name { get; set; } = string.Empty;
 
+    [MaxLength(100)]
+    public string? Slug { get; set; }
+
+    [MaxLength(30)]
+    public string? WhatsappNumber { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<User> Users { get; set; } = new List<User>();

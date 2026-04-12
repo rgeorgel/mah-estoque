@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - Mah Estoque</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">Mah Estoque</div>
+            <button class="hamburger" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav-links" id="navLinks">
+                <a href="dashboard.html" class="nav-link">Dashboard</a>
+                <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="pedidos.html" class="nav-link" id="pedidosLink">Pedidos</a>
+                <a href="vendas.html" class="nav-link">Vendas</a>
+                <a href="relatorios.html" class="nav-link">Relatórios</a>
+                <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+                <a href="configuracoes.html" class="nav-link active" id="configLink">Configurações</a>
+            </nav>
+            <div class="user-menu">
+                <span class="user-info" id="userName"></span>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <h1 class="page-title">Configurações da Loja</h1>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando configurações...</p>
+        </div>
+
+        <div id="configContent" class="hidden">
+            <div class="card" style="max-width:600px">
+                <div style="padding:24px">
+                    <h2 style="font-size:16px;font-weight:600;margin-bottom:4px">Catálogo Público</h2>
+                    <p style="font-size:13px;color:#64748b;margin-bottom:20px">Configure o link do catálogo e o número de WhatsApp para receber pedidos.</p>
+
+                    <form id="configForm">
+                        <div class="form-group">
+                            <label for="slug">Slug da loja (link do catálogo)</label>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <input type="text" id="slug" placeholder="Ex: minha-loja" style="flex:1"
+                                    pattern="[a-z0-9\-]+" title="Apenas letras minúsculas, números e hífens">
+                            </div>
+                            <small style="color:#64748b;font-size:12px" id="catalogLink"></small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="whatsappNumber">Número do WhatsApp</label>
+                            <input type="text" id="whatsappNumber" placeholder="Ex: 5511999999999 (com código do país)">
+                            <small style="color:#64748b;font-size:12px">Inclua o código do país. Ex: Brasil → 55 + DDD + número</small>
+                        </div>
+
+                        <div id="configAlert" class="alert alert-danger hidden"></div>
+                        <div id="configSuccess" class="alert alert-success hidden"></div>
+
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+                            <button type="submit" class="btn btn-primary">Salvar configurações</button>
+                            <button type="button" class="btn btn-secondary" id="btnOpenCatalog" onclick="openCatalog()" style="display:none">
+                                Abrir catálogo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/build.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+            document.querySelector('.hamburger').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+            });
+        });
+
+        if (!checkAuth()) throw new Error('Auth required');
+
+        if (!checkRole(['Admin'])) {
+            window.location.href = 'dashboard.html';
+        }
+
+        const user = getCurrentUser();
+        document.getElementById('userName').textContent = user.username;
+
+        async function loadConfig() {
+            try {
+                const config = await request('/tenant/config');
+                document.getElementById('slug').value = config.slug || '';
+                document.getElementById('whatsappNumber').value = config.whatsappNumber || '';
+                updateCatalogLink(config.slug);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('configContent').classList.remove('hidden');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function updateCatalogLink(slug) {
+            const linkEl = document.getElementById('catalogLink');
+            const btnOpen = document.getElementById('btnOpenCatalog');
+            if (slug) {
+                const url = `${location.origin}/catalogo.html?t=${encodeURIComponent(slug)}`;
+                linkEl.innerHTML = `Link do catálogo: <a href="${url}" target="_blank" style="color:#6366f1">${url}</a>`;
+                btnOpen.style.display = '';
+            } else {
+                linkEl.textContent = 'Defina um slug para gerar o link do catálogo.';
+                btnOpen.style.display = 'none';
+            }
+        }
+
+        function openCatalog() {
+            const slug = document.getElementById('slug').value.trim();
+            if (slug) window.open(`catalogo.html?t=${encodeURIComponent(slug)}`, '_blank');
+        }
+
+        document.getElementById('slug').addEventListener('input', (e) => {
+            updateCatalogLink(e.target.value.trim());
+        });
+
+        document.getElementById('configForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alertEl = document.getElementById('configAlert');
+            const successEl = document.getElementById('configSuccess');
+            alertEl.classList.add('hidden');
+            successEl.classList.add('hidden');
+
+            const slug = document.getElementById('slug').value.trim();
+            const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
+
+            if (slug && !/^[a-z0-9\-]+$/.test(slug)) {
+                alertEl.textContent = 'O slug deve conter apenas letras minúsculas, números e hífens.';
+                alertEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                await request('/tenant/config', {
+                    method: 'PUT',
+                    body: JSON.stringify({ slug: slug || null, whatsappNumber: whatsappNumber || null })
+                });
+                successEl.textContent = 'Configurações salvas com sucesso!';
+                successEl.classList.remove('hidden');
+                updateCatalogLink(slug);
+                setTimeout(() => successEl.classList.add('hidden'), 3000);
+            } catch (err) {
+                alertEl.textContent = err.message;
+                alertEl.classList.remove('hidden');
+            }
+        });
+
+        loadConfig();
+    </script>
+</body>
+</html>

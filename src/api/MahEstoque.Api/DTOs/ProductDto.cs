@@ -66,6 +66,14 @@ public class CreateProductRequest
     [MaxLength(50)]
     public string? Size { get; set; }
 
+    public string? Description { get; set; }
+
+    public decimal? SalePrice { get; set; }
+
+    public decimal? SalePriceDiscount { get; set; }
+
+    public bool IsVisible { get; set; } = false;
+
     public List<CreateVariantRequest>? Variants { get; set; }
 }
 
@@ -92,6 +100,14 @@ public class UpdateProductRequest
     [MaxLength(50)]
     public string? Size { get; set; }
 
+    public string? Description { get; set; }
+
+    public decimal? SalePrice { get; set; }
+
+    public decimal? SalePriceDiscount { get; set; }
+
+    public bool? IsVisible { get; set; }
+
     public List<UpsertVariantRequest>? Variants { get; set; }
 }
 
@@ -106,7 +122,12 @@ public class ProductDto
     public string? Category { get; set; }
     public string? Supplier { get; set; }
     public string? Size { get; set; }
+    public string? Description { get; set; }
+    public decimal? SalePrice { get; set; }
+    public decimal? SalePriceDiscount { get; set; }
+    public bool IsVisible { get; set; }
     public List<ProductVariantDto> Variants { get; set; } = new();
+    public List<ProductImageDto> Images { get; set; } = new();
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -119,8 +140,21 @@ public class ProductListItemDto
     public string? Category { get; set; }
     public string? Supplier { get; set; }
     public string? Size { get; set; }
+    public string? Description { get; set; }
     public decimal AcquiredValue { get; set; }
+    public decimal? SalePrice { get; set; }
+    public decimal? SalePriceDiscount { get; set; }
+    public bool IsVisible { get; set; }
     public int Quantity { get; set; }
     public int MinStock { get; set; }
     public List<ProductVariantDto> Variants { get; set; } = new();
+    public List<ProductImageDto> Images { get; set; } = new();
+}
+
+public class ProductImageDto
+{
+    public Guid Id { get; set; }
+    public string Url { get; set; } = string.Empty;
+    public bool IsPrimary { get; set; }
+    public int DisplayOrder { get; set; }
 }

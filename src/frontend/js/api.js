@@ -41,6 +41,57 @@ async function request(endpoint, options = {}) {
     return data;
 }
 
+// Request without Content-Type (for DELETE/PUT that return 204)
+async function requestRaw(endpoint, options = {}) {
+    const token = auth.getToken();
+    const headers = {
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers
+    };
+
+    const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+
+    if (response.status === 401) {
+        auth.clear();
+        window.location.href = 'login.html';
+        throw new Error('Unauthorized');
+    }
+
+    if (!response.ok) {
+        const text = await response.text();
+        let msg = 'Erro na requisição';
+        try { msg = JSON.parse(text).message || msg; } catch {}
+        throw new Error(msg);
+    }
+}
+
+// Multipart upload (images)
+async function requestMultipart(endpoint, formData) {
+    const token = auth.getToken();
+    const headers = {
+        ...(token && { Authorization: `Bearer ${token}` })
+    };
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: formData
+    });
+
+    if (response.status === 401) {
+        auth.clear();
+        window.location.href = 'login.html';
+        throw new Error('Unauthorized');
+    }
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Erro no upload');
+    }
+
+    return data;
+}
+
 function formatCurrency(value) {
     return new Intl.NumberFormat('pt-BR', {
         style: 'currency',

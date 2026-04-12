@@ -19,9 +19,11 @@
             <nav class="nav-links" id="navLinks">
                 <a href="dashboard.html" class="nav-link">Dashboard</a>
                 <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="pedidos.html" class="nav-link" id="pedidosLink">Pedidos</a>
                 <a href="vendas.html" class="nav-link">Vendas</a>
                 <a href="relatorios.html" class="nav-link">Relatórios</a>
                 <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+                <a href="configuracoes.html" class="nav-link" id="configLink">Configurações</a>
             </nav>
             <div class="user-menu">
                 <span class="user-info" id="userName"></span>
@@ -219,6 +221,7 @@
 
         if (!checkRole(['Admin'])) {
             document.getElementById('usersLink').style.display = 'none';
+            document.getElementById('configLink').style.display = 'none';
         }
 
         function switchTab(tab) {

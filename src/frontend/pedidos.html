@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedidos - Mah Estoque</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .status-filter {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .status-filter-btn {
+            padding: 5px 14px;
+            border: 1px solid #e2e8f0;
+            border-radius: 50px;
+            background: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            color: #475569;
+            transition: all .15s;
+        }
+        .status-filter-btn:hover, .status-filter-btn.active {
+            background: #6366f1;
+            border-color: #6366f1;
+            color: #fff;
+        }
+
+        .order-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        .order-card-header {
+            display: grid;
+            grid-template-columns: auto 1fr auto auto;
+            gap: 12px;
+            align-items: center;
+            padding: 14px 16px;
+            background: #fff;
+            cursor: pointer;
+            transition: background .1s;
+        }
+        .order-card-header:hover { background: #f8fafc; }
+        .order-ref {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+            white-space: nowrap;
+        }
+        .order-meta { min-width: 0; }
+        .order-customer {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1e293b;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .order-date {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+        .order-total {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+            white-space: nowrap;
+        }
+        .order-expand-icon {
+            font-size: 18px;
+            color: #94a3b8;
+            transition: transform .2s;
+            user-select: none;
+        }
+        .order-expand-icon.open { transform: rotate(180deg); }
+
+        .badge-pending   { background: #fef3c7; color: #92400e; }
+        .badge-confirmed { background: #d1fae5; color: #065f46; }
+        .badge-cancelled { background: #fee2e2; color: #991b1b; }
+
+        .order-body {
+            display: none;
+            border-top: 1px solid #f1f5f9;
+            background: #fafafa;
+            padding: 14px 16px;
+        }
+        .order-body.open { display: block; }
+
+        .order-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+        .order-items-table th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #64748b;
+            font-weight: 600;
+        }
+        .order-items-table td {
+            padding: 8px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #1e293b;
+        }
+
+        .order-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 600px) {
+            .order-card-header {
+                grid-template-columns: auto 1fr auto;
+            }
+            .order-expand-icon { display: none; }
+            .order-card-header { cursor: default; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">Mah Estoque</div>
+            <button class="hamburger" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav-links" id="navLinks">
+                <a href="dashboard.html" class="nav-link">Dashboard</a>
+                <a href="produtos.html" class="nav-link">Produtos</a>
+                <a href="pedidos.html" class="nav-link active">Pedidos</a>
+                <a href="vendas.html" class="nav-link">Vendas</a>
+                <a href="relatorios.html" class="nav-link">Relatórios</a>
+                <a href="usuarios.html" class="nav-link" id="usersLink">Usuários</a>
+                <a href="configuracoes.html" class="nav-link" id="configLink">Configurações</a>
+            </nav>
+            <div class="user-menu">
+                <span class="user-info" id="userName"></span>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <h1 class="page-title">Pedidos do Catálogo</h1>
+
+        <div class="status-filter">
+            <button class="status-filter-btn active" onclick="filterOrders('', this)">Todos</button>
+            <button class="status-filter-btn" onclick="filterOrders('Pending', this)">Pendentes</button>
+            <button class="status-filter-btn" onclick="filterOrders('Confirmed', this)">Confirmados</button>
+            <button class="status-filter-btn" onclick="filterOrders('Cancelled', this)">Cancelados</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando pedidos...</p>
+        </div>
+
+        <div id="ordersContainer"></div>
+        <div id="emptyState" class="empty-state hidden">
+            <p>Nenhum pedido encontrado</p>
+        </div>
+    </main>
+
+    <script src="js/build.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+            document.querySelector('.hamburger').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+            });
+        });
+
+        if (!checkAuth()) throw new Error('Auth required');
+        if (!checkRole(['Admin', 'Manager'])) window.location.href = 'dashboard.html';
+
+        const user = getCurrentUser();
+        document.getElementById('userName').textContent = user.username;
+
+        if (!checkRole(['Admin'])) {
+            document.getElementById('usersLink').style.display = 'none';
+            document.getElementById('configLink').style.display = 'none';
+        }
+
+        let orders = [];
+        let currentFilter = '';
+
+        async function loadOrders(status = '') {
+            try {
+                const qs = status ? `?status=${status}` : '';
+                orders = await request(`/orders${qs}`);
+                renderOrders(orders);
+                document.getElementById('loading').classList.add('hidden');
+            } catch (error) {
+                showToast(error.message, 'error');
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function filterOrders(status, btn) {
+            currentFilter = status;
+            document.querySelectorAll('.status-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('ordersContainer').innerHTML = '';
+            document.getElementById('emptyState').classList.add('hidden');
+            loadOrders(status);
+        }
+
+        function renderOrders(data) {
+            const container = document.getElementById('ordersContainer');
+            const emptyState = document.getElementById('emptyState');
+
+            if (data.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            container.innerHTML = data.map(o => renderOrderCard(o)).join('');
+        }
+
+        function statusLabel(s) {
+            return { Pending: 'Pendente', Confirmed: 'Confirmado', Cancelled: 'Cancelado' }[s] || s;
+        }
+
+        function statusBadgeClass(s) {
+            return { Pending: 'badge-pending', Confirmed: 'badge-confirmed', Cancelled: 'badge-cancelled' }[s] || '';
+        }
+
+        function renderOrderCard(o) {
+            const itemRows = o.items.map(i => {
+                const variant = i.variantLabel ? ` <span style="color:#64748b;font-size:12px">(${escHtml(i.variantLabel)})</span>` : '';
+                return `<tr>
+                    <td>${escHtml(i.productName)}${variant}</td>
+                    <td style="text-align:center">${i.quantity}</td>
+                    <td>${formatCurrency(i.unitPrice)}</td>
+                    <td style="text-align:right">${formatCurrency(i.unitPrice * i.quantity)}</td>
+                </tr>`;
+            }).join('');
+
+            const canConfirm = o.status === 'Pending';
+            const canCancel  = o.status !== 'Cancelled';
+
+            const actions = `
+                ${canConfirm ? `<button class="btn btn-sm btn-primary" onclick="updateStatus('${o.id}', 'Confirmed')">Confirmar</button>` : ''}
+                ${canCancel  ? `<button class="btn btn-sm btn-danger"  onclick="updateStatus('${o.id}', 'Cancelled')">Cancelar</button>` : ''}
+            `;
+
+            return `
+            <div class="order-card" id="order-${o.id}">
+                <div class="order-card-header" onclick="toggleOrder('${o.id}')">
+                    <div class="order-ref">#${o.orderRef}</div>
+                    <div class="order-meta">
+                        <div class="order-customer">${o.customerName ? escHtml(o.customerName) : '<span style="color:#94a3b8">Sem nome</span>'}</div>
+                        <div class="order-date">${formatDate(o.createdAt)}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                        <span class="badge ${statusBadgeClass(o.status)}" id="badge-${o.id}">${statusLabel(o.status)}</span>
+                        <span class="order-total">${formatCurrency(o.totalValue)}</span>
+                    </div>
+                    <div class="order-expand-icon" id="icon-${o.id}">&#8964;</div>
+                </div>
+                <div class="order-body" id="body-${o.id}">
+                    <table class="order-items-table">
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th style="text-align:center">Qtd</th>
+                                <th>Preço unit.</th>
+                                <th style="text-align:right">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>${itemRows}</tbody>
+                    </table>
+                    <div class="order-actions">${actions}</div>
+                </div>
+            </div>`;
+        }
+
+        function toggleOrder(id) {
+            const body = document.getElementById(`body-${id}`);
+            const icon = document.getElementById(`icon-${id}`);
+            body.classList.toggle('open');
+            icon.classList.toggle('open');
+        }
+
+        async function updateStatus(id, status) {
+            try {
+                const updated = await request(`/orders/${id}/status`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ status })
+                });
+
+                // Update badge and actions in-place
+                const badge = document.getElementById(`badge-${id}`);
+                if (badge) {
+                    badge.className = `badge ${statusBadgeClass(updated.status)}`;
+                    badge.textContent = statusLabel(updated.status);
+                }
+
+                // Re-render the card to update action buttons
+                const card = document.getElementById(`order-${id}`);
+                const wasOpen = document.getElementById(`body-${id}`)?.classList.contains('open');
+                if (card) {
+                    const idx = orders.findIndex(o => o.id === id);
+                    if (idx !== -1) orders[idx] = updated;
+                    card.outerHTML = renderOrderCard(updated);
+                    if (wasOpen) {
+                        const body = document.getElementById(`body-${id}`);
+                        const icon = document.getElementById(`icon-${id}`);
+                        if (body) body.classList.add('open');
+                        if (icon) icon.classList.add('open');
+                    }
+                }
+
+                showToast(`Pedido ${status === 'Confirmed' ? 'confirmado' : 'cancelado'} com sucesso`);
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        function escHtml(str) {
+            return String(str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        loadOrders();
+    </script>
+</body>
+</html>
