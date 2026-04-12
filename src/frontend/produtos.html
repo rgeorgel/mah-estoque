@@ -282,6 +282,7 @@
                             <th>Valor Custo</th>
                             <th>Preço Venda</th>
                             <th>Quantidade</th>
+                            <th>Imagens</th>
                             <th>Catálogo</th>
                             <th>Ações</th>
                         </tr>
@@ -479,6 +480,9 @@
                         <span class="badge ${isLow ? 'badge-danger' : 'badge-success'}">
                             ${totalQty}
                         </span>
+                    </td>
+                    <td style="color:${(p.images?.length||0)===0?'#94a3b8':'#1e293b'}">
+                        ${(p.images?.length || 0) === 0 ? '—' : p.images.length}
                     </td>
                     <td>
                         <span class="badge ${p.isVisible ? 'badge-visible' : 'badge-hidden'}">
