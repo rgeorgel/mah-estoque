@@ -263,7 +263,31 @@
             <select id="categoryFilter">
                 <option value="">Todas as categorias</option>
             </select>
+            <select id="supplierFilter">
+                <option value="">Todos os fornecedores</option>
+            </select>
             <button class="btn btn-primary" onclick="openModal()">+ Novo Produto</button>
+        </div>
+        <div class="search-bar" style="margin-top:-4px">
+            <select id="stockFilter">
+                <option value="">Qualquer estoque</option>
+                <option value="in">Com estoque</option>
+                <option value="low">Estoque baixo</option>
+                <option value="out">Sem estoque</option>
+            </select>
+            <select id="sizeFilter">
+                <option value="">Todos os tamanhos</option>
+            </select>
+            <select id="visibilityFilter">
+                <option value="">Visibilidade: todas</option>
+                <option value="visible">Visível no catálogo</option>
+                <option value="hidden">Oculto</option>
+            </select>
+            <select id="imagesFilter">
+                <option value="">Com ou sem imagens</option>
+                <option value="yes">Com imagens</option>
+                <option value="no">Sem imagens</option>
+            </select>
         </div>
 
         <div class="loading" id="loading">
@@ -432,7 +456,7 @@
             try {
                 products = await request('/products');
                 renderProducts(products);
-                updateCategoryFilter();
+                updateDynamicFilters();
                 document.getElementById('loading').classList.add('hidden');
             } catch (error) {
                 showToast(error.message, 'error');
@@ -462,10 +486,8 @@
 
             emptyState.classList.add('hidden');
             tbody.innerHTML = data.map(p => {
-                const totalQty = p.variants && p.variants.length > 0
-                    ? p.variants.reduce((s, v) => s + v.quantity, 0)
-                    : p.quantity;
-                const isLow = totalQty <= p.minStock;
+                const qty = totalQty(p);
+                const isLow = qty <= p.minStock;
                 const priceHtml = p.salePriceDiscount
                     ? `<span style="text-decoration:line-through;color:#94a3b8;font-size:12px">${formatCurrency(p.salePrice)}</span><br><strong style="color:#059669">${formatCurrency(p.salePriceDiscount)}</strong>`
                     : p.salePrice ? formatCurrency(p.salePrice) : '-';
@@ -478,7 +500,7 @@
                     <td>${priceHtml}</td>
                     <td>
                         <span class="badge ${isLow ? 'badge-danger' : 'badge-success'}">
-                            ${totalQty}
+                            ${qty}
                         </span>
                     </td>
                     <td style="color:${(p.images?.length||0)===0?'#94a3b8':'#1e293b'}">
@@ -497,27 +519,79 @@
             }).join('');
         }
 
-        function updateCategoryFilter() {
-            const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
-            const select = document.getElementById('categoryFilter');
-            select.innerHTML = '<option value="">Todas as categorias</option>' +
-                categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        function totalQty(p) {
+            return p.variants?.length > 0
+                ? p.variants.reduce((s, v) => s + v.quantity, 0)
+                : p.quantity;
         }
 
-        document.getElementById('searchInput').addEventListener('input', debounce((e) => {
-            const search = e.target.value.toLowerCase();
-            const category = document.getElementById('categoryFilter').value;
+        function updateDynamicFilters() {
+            const categories = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+            const catSel = document.getElementById('categoryFilter');
+            const catCurrent = catSel.value;
+            catSel.innerHTML = '<option value="">Todas as categorias</option>' +
+                categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            catSel.value = catCurrent;
+
+            const suppliers = [...new Set(products.map(p => p.supplier).filter(Boolean))].sort();
+            const supSel = document.getElementById('supplierFilter');
+            const supCurrent = supSel.value;
+            supSel.innerHTML = '<option value="">Todos os fornecedores</option>' +
+                suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+            supSel.value = supCurrent;
+
+            // Sizes: from p.size (simple products) + p.variants[].size (variant products)
+            const sizes = [...new Set(products.flatMap(p => {
+                if (p.variants?.length > 0) return p.variants.map(v => v.size).filter(Boolean);
+                return p.size ? [p.size] : [];
+            }))].sort();
+            const sizeSel = document.getElementById('sizeFilter');
+            const sizeCurrent = sizeSel.value;
+            sizeSel.innerHTML = '<option value="">Todos os tamanhos</option>' +
+                sizes.map(s => `<option value="${s}">${s}</option>`).join('');
+            sizeSel.value = sizeCurrent;
+        }
+
+        function applyFilters() {
+            const search     = document.getElementById('searchInput').value.toLowerCase().trim();
+            const category   = document.getElementById('categoryFilter').value;
+            const supplier   = document.getElementById('supplierFilter').value;
+            const stock      = document.getElementById('stockFilter').value;
+            const size       = document.getElementById('sizeFilter').value;
+            const visibility = document.getElementById('visibilityFilter').value;
+            const images     = document.getElementById('imagesFilter').value;
+
             const filtered = products.filter(p => {
-                const matchSearch = p.name.toLowerCase().includes(search) || (p.sku || '').toLowerCase().includes(search);
-                const matchCategory = !category || p.category === category;
-                return matchSearch && matchCategory;
+                if (search && !p.name.toLowerCase().includes(search) && !(p.sku || '').toLowerCase().includes(search))
+                    return false;
+                if (category && p.category !== category)
+                    return false;
+                if (supplier && p.supplier !== supplier)
+                    return false;
+                if (visibility === 'visible' && !p.isVisible)  return false;
+                if (visibility === 'hidden'  &&  p.isVisible)  return false;
+                if (images === 'yes' && !(p.images?.length > 0)) return false;
+                if (images === 'no'  &&   p.images?.length > 0)  return false;
+                if (size) {
+                    const hasSize = p.variants?.length > 0
+                        ? p.variants.some(v => v.size === size)
+                        : p.size === size;
+                    if (!hasSize) return false;
+                }
+                if (stock) {
+                    const qty  = totalQty(p);
+                    if (stock === 'out' && qty !== 0)                   return false;
+                    if (stock === 'low' && !(qty > 0 && qty <= p.minStock)) return false;
+                    if (stock === 'in'  && qty <= p.minStock)            return false;
+                }
+                return true;
             });
             renderProducts(filtered);
-        }, 300));
+        }
 
-        document.getElementById('categoryFilter').addEventListener('change', () => {
-            document.getElementById('searchInput').dispatchEvent(new Event('input'));
-        });
+        document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 300));
+        ['categoryFilter','supplierFilter','stockFilter','sizeFilter','visibilityFilter','imagesFilter']
+            .forEach(id => document.getElementById(id).addEventListener('change', applyFilters));
 
         // --- Variant rows ---
 
