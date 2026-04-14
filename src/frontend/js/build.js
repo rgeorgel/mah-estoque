@@ -7,4 +7,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('script[src]').forEach(el => {
         el.src = el.src.split('?v=')[0] + '?v=' + BUILD_VERSION;
     });
+
+    // Mark the nav link that matches the current page as active
+    const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('a.nav-link').forEach(link => {
+        const linkFile = link.getAttribute('href').split('/').pop();
+        link.classList.toggle('active', linkFile === currentFile);
+    });
 });
