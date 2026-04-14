@@ -228,6 +228,21 @@
         }
         .badge-visible { background: #d1fae5; color: #065f46; }
         .badge-hidden { background: #f1f5f9; color: #64748b; }
+
+        /* Sortable table headers */
+        th[data-sort] {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        th[data-sort]:hover { background: #f1f5f9; }
+        th[data-sort]::after {
+            content: ' ⇅';
+            font-size: 11px;
+            color: #cbd5e1;
+        }
+        th[data-sort].sort-asc::after  { content: ' ▲'; color: #6366f1; }
+        th[data-sort].sort-desc::after { content: ' ▼'; color: #6366f1; }
     </style>
 </head>
 <body>
@@ -300,14 +315,14 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Nome</th>
+                            <th data-sort="name" onclick="sortBy('name')">Nome</th>
                             <th>Variações / Tamanho</th>
-                            <th>Categoria</th>
-                            <th>Valor Custo</th>
-                            <th>Preço Venda</th>
-                            <th>Quantidade</th>
-                            <th>Imagens</th>
-                            <th>Catálogo</th>
+                            <th data-sort="category" onclick="sortBy('category')">Categoria</th>
+                            <th data-sort="acquiredValue" onclick="sortBy('acquiredValue')">Valor Custo</th>
+                            <th data-sort="salePrice" onclick="sortBy('salePrice')">Preço Venda</th>
+                            <th data-sort="quantity" onclick="sortBy('quantity')">Quantidade</th>
+                            <th data-sort="images" onclick="sortBy('images')">Imagens</th>
+                            <th data-sort="isVisible" onclick="sortBy('isVisible')">Catálogo</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -451,12 +466,51 @@
         }
 
         let products = [];
+        let sortCol = 'name';
+        let sortDir = 1; // 1 = asc, -1 = desc
+
+        function sortBy(col) {
+            if (sortCol === col) {
+                sortDir *= -1;
+            } else {
+                sortCol = col;
+                sortDir = 1;
+            }
+            // Update header classes
+            document.querySelectorAll('th[data-sort]').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.sort === sortCol)
+                    th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+            });
+            applyFilters();
+        }
+
+        function sortProducts(data) {
+            return [...data].sort((a, b) => {
+                let va, vb;
+                switch (sortCol) {
+                    case 'name':         va = a.name.toLowerCase();       vb = b.name.toLowerCase(); break;
+                    case 'category':     va = (a.category || '').toLowerCase(); vb = (b.category || '').toLowerCase(); break;
+                    case 'acquiredValue': va = a.acquiredValue ?? 0;        vb = b.acquiredValue ?? 0; break;
+                    case 'salePrice':    va = a.salePriceDiscount ?? a.salePrice ?? 0; vb = b.salePriceDiscount ?? b.salePrice ?? 0; break;
+                    case 'quantity':     va = totalQty(a);                 vb = totalQty(b); break;
+                    case 'images':       va = a.images?.length ?? 0;       vb = b.images?.length ?? 0; break;
+                    case 'isVisible':    va = a.isVisible ? 1 : 0;         vb = b.isVisible ? 1 : 0; break;
+                    default:             return 0;
+                }
+                if (va < vb) return -sortDir;
+                if (va > vb) return  sortDir;
+                return 0;
+            });
+        }
 
         async function loadProducts() {
             try {
                 products = await request('/products');
-                renderProducts(products);
                 updateDynamicFilters();
+                // Apply default sort (name asc) and reflect in header
+                document.querySelector('th[data-sort="name"]')?.classList.add('sort-asc');
+                applyFilters();
                 document.getElementById('loading').classList.add('hidden');
             } catch (error) {
                 showToast(error.message, 'error');
@@ -586,7 +640,7 @@
                 }
                 return true;
             });
-            renderProducts(filtered);
+            renderProducts(sortProducts(filtered));
         }
 
         document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 300));
