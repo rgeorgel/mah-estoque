@@ -117,7 +117,7 @@
             const linkEl = document.getElementById('catalogLink');
             const btnOpen = document.getElementById('btnOpenCatalog');
             if (slug) {
-                const url = `${location.origin}/catalogo.html?t=${encodeURIComponent(slug)}`;
+                const url = `${location.origin}/catalogo/${encodeURIComponent(slug)}`;
                 linkEl.innerHTML = `Link do catálogo: <a href="${url}" target="_blank" style="color:#6366f1">${url}</a>`;
                 btnOpen.style.display = '';
             } else {
@@ -128,7 +128,7 @@
 
         function openCatalog() {
             const slug = document.getElementById('slug').value.trim();
-            if (slug) window.open(`catalogo.html?t=${encodeURIComponent(slug)}`, '_blank');
+            if (slug) window.open(`/catalogo/${encodeURIComponent(slug)}`, '_blank');
         }
 
         document.getElementById('slug').addEventListener('input', (e) => {

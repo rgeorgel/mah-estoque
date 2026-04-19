@@ -672,8 +672,7 @@
 
 <script>
     const API_BASE = '/api';
-    const params = new URLSearchParams(window.location.search);
-    const slug = params.get('t') || params.get('tenant') || '';
+    const slug = window.location.pathname.split('/').filter(Boolean).pop() || '';
 
     let catalogData = null;
     let cart = [];
