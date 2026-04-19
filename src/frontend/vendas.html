@@ -37,8 +37,9 @@
         <div class="card">
             <form id="saleForm">
                 <div class="form-group">
-                    <label for="productSelect">Produto</label>
-                    <select id="productSelect" required>
+                    <label for="productSearch">Produto</label>
+                    <input type="text" id="productSearch" placeholder="Filtrar produto...">
+                    <select id="productSelect" required style="margin-top:6px">
                         <option value="">Selecione um produto</option>
                     </select>
                 </div>
@@ -163,20 +164,29 @@
 
         let products = [];
 
+        function buildProductOption(p) {
+            const totalQty = p.variants && p.variants.length > 0
+                ? p.variants.reduce((s, v) => s + v.quantity, 0)
+                : p.quantity;
+            const label = p.variants && p.variants.length > 0
+                ? `${p.name} (${p.variants.length} variações)`
+                : `${p.name}${p.sku ? ' [' + p.sku + ']' : ''}${p.size ? ' - ' + p.size : ''} - Estoque: ${totalQty}`;
+            return `<option value="${p.id}">${label}</option>`;
+        }
+
+        function renderProductOptions(query) {
+            const filtered = query
+                ? products.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+                : products;
+            const select = document.getElementById('productSelect');
+            select.innerHTML = '<option value="">Selecione um produto</option>' +
+                filtered.map(buildProductOption).join('');
+        }
+
         async function loadProducts() {
             try {
                 products = await request('/products');
-                const select = document.getElementById('productSelect');
-                select.innerHTML = '<option value="">Selecione um produto</option>' +
-                    products.map(p => {
-                        const totalQty = p.variants && p.variants.length > 0
-                            ? p.variants.reduce((s, v) => s + v.quantity, 0)
-                            : p.quantity;
-                        const label = p.variants && p.variants.length > 0
-                            ? `${p.name} (${p.variants.length} variações)`
-                            : `${p.name}${p.sku ? ' [' + p.sku + ']' : ''}${p.size ? ' - ' + p.size : ''} - Estoque: ${totalQty}`;
-                        return `<option value="${p.id}">${label}</option>`;
-                    }).join('');
+                renderProductOptions('');
             } catch (error) {
                 showToast(error.message, 'error');
             }
@@ -221,6 +231,10 @@
                 showToast(error.message, 'error');
             }
         }
+
+        document.getElementById('productSearch').addEventListener('input', (e) => {
+            renderProductOptions(e.target.value);
+        });
 
         document.getElementById('productSelect').addEventListener('change', (e) => {
             const productId = e.target.value;
