@@ -5,6 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vendas - Mah Estoque</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .combobox { position: relative; }
+        .combobox-list {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0; right: 0;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+            z-index: 200;
+            list-style: none;
+            margin: 0;
+            padding: 4px 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,.08);
+        }
+        .combobox-list.open { display: block; }
+        .combobox-list li {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            line-height: 1.4;
+        }
+        .combobox-list li:hover { background: #f3f4f6; }
+        .combobox-list li.no-results { color: #9ca3af; cursor: default; }
+        .combobox-list li.no-results:hover { background: none; }
+    </style>
 </head>
 <body>
     <header class="header">
@@ -37,11 +66,12 @@
         <div class="card">
             <form id="saleForm">
                 <div class="form-group">
-                    <label for="productSearch">Produto</label>
-                    <input type="text" id="productSearch" placeholder="Filtrar produto...">
-                    <select id="productSelect" required style="margin-top:6px">
-                        <option value="">Selecione um produto</option>
-                    </select>
+                    <label>Produto</label>
+                    <div class="combobox" id="productCombobox">
+                        <input type="text" id="productSearch" placeholder="Buscar produto..." autocomplete="off">
+                        <ul class="combobox-list" id="productDropdown"></ul>
+                    </div>
+                    <input type="hidden" id="productSelect">
                 </div>
                 <div class="form-group hidden" id="variantGroup">
                     <label for="variantSelect">Variação</label>
@@ -164,29 +194,82 @@
 
         let products = [];
 
-        function buildProductOption(p) {
+        function buildProductLabel(p) {
             const totalQty = p.variants && p.variants.length > 0
                 ? p.variants.reduce((s, v) => s + v.quantity, 0)
                 : p.quantity;
-            const label = p.variants && p.variants.length > 0
+            return p.variants && p.variants.length > 0
                 ? `${p.name} (${p.variants.length} variações)`
-                : `${p.name}${p.sku ? ' [' + p.sku + ']' : ''}${p.size ? ' - ' + p.size : ''} - Estoque: ${totalQty}`;
-            return `<option value="${p.id}">${label}</option>`;
+                : `${p.name}${p.sku ? ' [' + p.sku + ']' : ''}${p.size ? ' - ' + p.size : ''} — Estoque: ${totalQty}`;
         }
 
-        function renderProductOptions(query) {
-            const filtered = query
-                ? products.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
-                : products;
-            const select = document.getElementById('productSelect');
-            select.innerHTML = '<option value="">Selecione um produto</option>' +
-                filtered.map(buildProductOption).join('');
+        function openProductDropdown(query) {
+            const q = (query || '').toLowerCase();
+            const filtered = q ? products.filter(p => p.name.toLowerCase().includes(q)) : products;
+            const list = document.getElementById('productDropdown');
+            if (filtered.length === 0) {
+                list.innerHTML = '<li class="no-results">Nenhum produto encontrado</li>';
+            } else {
+                list.innerHTML = filtered.map(p =>
+                    `<li data-id="${p.id}">${buildProductLabel(p)}</li>`
+                ).join('');
+            }
+            list.classList.add('open');
+        }
+
+        function closeProductDropdown() {
+            document.getElementById('productDropdown').classList.remove('open');
+        }
+
+        function selectProduct(productId, label) {
+            document.getElementById('productSearch').value = label;
+            document.getElementById('productSelect').value = productId;
+            closeProductDropdown();
+            onProductSelected(productId);
+        }
+
+        function resetCombobox() {
+            document.getElementById('productSearch').value = '';
+            document.getElementById('productSelect').value = '';
+            closeProductDropdown();
+            onProductSelected('');
+        }
+
+        function onProductSelected(productId) {
+            const product = products.find(p => p.id === productId);
+            const variantGroup = document.getElementById('variantGroup');
+            const variantSelect = document.getElementById('variantSelect');
+
+            if (!product) {
+                variantGroup.classList.add('hidden');
+                variantSelect.required = false;
+                document.getElementById('currentStock').textContent = '-';
+                return;
+            }
+
+            if (product.variants && product.variants.length > 0) {
+                variantGroup.classList.remove('hidden');
+                variantSelect.required = true;
+                variantSelect.innerHTML = '<option value="">Selecione uma variação</option>' +
+                    product.variants.map(v => {
+                        const label = [v.size, v.color].filter(Boolean).join(' / ') || 'Sem nome';
+                        const sku = v.sku ? ` [${v.sku}]` : '';
+                        return `<option value="${v.id}" data-stock="${v.quantity}">${label}${sku} — Estoque: ${v.quantity}</option>`;
+                    }).join('');
+                document.getElementById('currentStock').textContent = '-';
+                document.getElementById('quantity').max = '';
+            } else {
+                variantGroup.classList.add('hidden');
+                variantSelect.required = false;
+                variantSelect.value = '';
+                document.getElementById('currentStock').textContent = product.quantity;
+                document.getElementById('quantity').max = product.quantity;
+            }
         }
 
         async function loadProducts() {
             try {
                 products = await request('/products');
-                renderProductOptions('');
             } catch (error) {
                 showToast(error.message, 'error');
             }
@@ -232,41 +315,23 @@
             }
         }
 
-        document.getElementById('productSearch').addEventListener('input', (e) => {
-            renderProductOptions(e.target.value);
+        document.getElementById('productSearch').addEventListener('focus', (e) => {
+            openProductDropdown(e.target.value);
         });
 
-        document.getElementById('productSelect').addEventListener('change', (e) => {
-            const productId = e.target.value;
-            const product = products.find(p => p.id === productId);
-            const variantGroup = document.getElementById('variantGroup');
-            const variantSelect = document.getElementById('variantSelect');
+        document.getElementById('productSearch').addEventListener('input', (e) => {
+            document.getElementById('productSelect').value = '';
+            openProductDropdown(e.target.value);
+        });
 
-            if (!product) {
-                variantGroup.classList.add('hidden');
-                variantSelect.required = false;
-                document.getElementById('currentStock').textContent = '-';
-                return;
-            }
+        document.getElementById('productDropdown').addEventListener('click', (e) => {
+            const li = e.target.closest('li[data-id]');
+            if (li) selectProduct(li.dataset.id, li.textContent);
+        });
 
-            if (product.variants && product.variants.length > 0) {
-                variantGroup.classList.remove('hidden');
-                variantSelect.required = true;
-                variantSelect.innerHTML = '<option value="">Selecione uma variação</option>' +
-                    product.variants.map(v => {
-                        const label = [v.size, v.color].filter(Boolean).join(' / ') || 'Sem nome';
-                        const sku = v.sku ? ` [${v.sku}]` : '';
-                        return `<option value="${v.id}" data-stock="${v.quantity}">${label}${sku} — Estoque: ${v.quantity}</option>`;
-                    }).join('');
-                document.getElementById('currentStock').textContent = '-';
-                document.getElementById('quantity').max = '';
-            } else {
-                variantGroup.classList.add('hidden');
-                variantSelect.required = false;
-                variantSelect.value = '';
-                document.getElementById('currentStock').textContent = product.quantity;
-                document.getElementById('quantity').max = product.quantity;
-            }
+        document.addEventListener('click', (e) => {
+            if (!document.getElementById('productCombobox').contains(e.target))
+                closeProductDropdown();
         });
 
         document.getElementById('variantSelect').addEventListener('change', (e) => {
@@ -293,6 +358,12 @@
             successMsg.classList.add('hidden');
 
             const productId = document.getElementById('productSelect').value;
+            if (!productId) {
+                errorMsg.textContent = 'Selecione um produto.';
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
             const variantId = document.getElementById('variantSelect').value || null;
             const quantity = parseInt(document.getElementById('quantity').value);
             const unitValue = parseFloat(document.getElementById('unitValue').value);
@@ -315,6 +386,7 @@
                 successMsg.textContent = 'Venda registrada com sucesso!';
                 successMsg.classList.remove('hidden');
                 document.getElementById('saleForm').reset();
+                resetCombobox();
                 document.getElementById('variantGroup').classList.add('hidden');
                 document.getElementById('variantSelect').required = false;
                 document.getElementById('currentStock').textContent = '-';
