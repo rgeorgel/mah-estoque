@@ -123,6 +123,10 @@ using (var scope = app.Services.CreateScope())
             CONSTRAINT ""FK_OrderItems_Variants_VariantId"" FOREIGN KEY (""VariantId"") REFERENCES ""ProductVariants"" (""Id"") ON DELETE SET NULL
         )");
     db.Database.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_OrderItems_OrderId"" ON ""OrderItems"" (""OrderId"")");
+
+    // Forma de pagamento e parcelas nas transações
+    db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Transactions"" ADD COLUMN IF NOT EXISTS ""PaymentMethod"" character varying(20)");
+    db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Transactions"" ADD COLUMN IF NOT EXISTS ""Installments"" integer");
 }
 
 // Serve uploaded images as static files from /uploads/

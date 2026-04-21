@@ -79,6 +79,13 @@
                         <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
+                <div class="card">
+                    <h2 class="card-title">Vendas por Forma de Pagamento</h2>
+                    <div class="chart-container">
+                        <canvas id="paymentChart"></canvas>
+                    </div>
+                    <div id="paymentTable" style="margin-top:12px"></div>
+                </div>
                 <div class="card" style="grid-column: 1 / -1;">
                     <h2 class="card-title">Vendas por Semana (Últimos 3 meses)</h2>
                     <div class="chart-container">
@@ -112,6 +119,15 @@
         let salesChart = null;
         let categoryChart = null;
         let weeklyChart = null;
+        let paymentChart = null;
+
+        const PAYMENT_LABELS = {
+            'Dinheiro': 'Dinheiro',
+            'Pix': 'Pix',
+            'CartaoDebito': 'Cartão de Débito',
+            'CartaoCredito': 'Cartão de Crédito',
+            'NaoInformado': 'Não informado'
+        };
 
         if (!checkAuth()) {
             throw new Error('Auth required');
@@ -166,6 +182,7 @@
                 renderSalesChart(stats.salesByDay);
                 renderCategoryChart(stats.stockByCategory);
                 renderWeeklyChart(stats.salesByWeek);
+                renderPaymentChart(stats.salesByPaymentMethod || []);
 
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('dashboardContent').classList.remove('hidden');
@@ -238,6 +255,61 @@
                     }
                 }
             });
+        }
+
+        function renderPaymentChart(data) {
+            const ctx = document.getElementById('paymentChart').getContext('2d');
+            if (paymentChart) paymentChart.destroy();
+
+            if (data.length === 0) {
+                document.getElementById('paymentTable').innerHTML = '<p style="color:#94a3b8;text-align:center;font-size:13px">Sem vendas registradas</p>';
+                return;
+            }
+
+            const colors = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+            const labels = data.map(d => PAYMENT_LABELS[d.method] || d.method);
+
+            paymentChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: data.map(d => d.revenue),
+                        backgroundColor: colors.slice(0, data.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${formatCurrency(ctx.raw)}`
+                            }
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('paymentTable').innerHTML = `
+                <table style="width:100%;font-size:13px;border-collapse:collapse">
+                    <thead>
+                        <tr style="color:#64748b;border-bottom:1px solid #e2e8f0">
+                            <th style="text-align:left;padding:4px 8px">Forma</th>
+                            <th style="text-align:right;padding:4px 8px">Receita</th>
+                            <th style="text-align:right;padding:4px 8px">Qtd</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.map(d => `
+                        <tr style="border-bottom:1px solid #f1f5f9">
+                            <td style="padding:6px 8px">${PAYMENT_LABELS[d.method] || d.method}</td>
+                            <td style="text-align:right;padding:6px 8px;font-weight:600">${formatCurrency(d.revenue)}</td>
+                            <td style="text-align:right;padding:6px 8px;color:#64748b">${d.quantity}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`;
         }
 
         function renderWeeklyChart(data) {

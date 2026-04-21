@@ -80,6 +80,17 @@ public class ReportService : IReportService
             })
             .ToList();
 
+        var salesByPaymentMethod = allSales
+            .GroupBy(t => t.PaymentMethod.HasValue ? t.PaymentMethod.Value.ToString() : "NaoInformado")
+            .Select(g => new PaymentMethodStatsDto
+            {
+                Method = g.Key,
+                Quantity = g.Sum(t => t.Quantity),
+                Revenue = g.Sum(t => t.TotalValue)
+            })
+            .OrderByDescending(p => p.Revenue)
+            .ToList();
+
         return new DashboardStatsDto
         {
             TotalProducts = products.Count,
@@ -100,7 +111,8 @@ public class ReportService : IReportService
             }).ToList(),
             StockByCategory = stockByCategory,
             SalesByDay = salesByDay,
-            SalesByWeek = salesByWeek
+            SalesByWeek = salesByWeek,
+            SalesByPaymentMethod = salesByPaymentMethod
         };
     }
 
@@ -137,7 +149,9 @@ public class ReportService : IReportService
                 Quantity = t.Quantity,
                 UnitValue = t.UnitValue,
                 TotalValue = t.TotalValue,
-                CreatedAt = t.CreatedAt
+                CreatedAt = t.CreatedAt,
+                PaymentMethod = t.PaymentMethod.HasValue ? t.PaymentMethod.Value.ToString() : null,
+                Installments = t.Installments
             }).ToList(),
             TotalRevenue = transactions.Sum(t => t.TotalValue),
             TotalQuantity = transactions.Sum(t => t.Quantity),

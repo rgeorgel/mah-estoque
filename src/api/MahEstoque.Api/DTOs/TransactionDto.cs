@@ -20,6 +20,8 @@ public class CreateTransactionRequest
     public decimal UnitValue { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+    public string? PaymentMethod { get; set; }
+    public int? Installments { get; set; }
 }
 
 public class UpdateTransactionRequest
@@ -27,6 +29,8 @@ public class UpdateTransactionRequest
     public int? Quantity { get; set; }
     public decimal? UnitValue { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public string? PaymentMethod { get; set; }
+    public int? Installments { get; set; }
 }
 
 public class TransactionDto
@@ -45,4 +49,6 @@ public class TransactionDto
     public decimal UnitValue { get; set; }
     public decimal TotalValue { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? PaymentMethod { get; set; }
+    public int? Installments { get; set; }
 }

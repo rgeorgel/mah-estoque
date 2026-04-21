@@ -13,6 +13,14 @@ public class DashboardStatsDto
     public List<CategoryStockDto> StockByCategory { get; set; } = new();
     public List<DailySalesDto> SalesByDay { get; set; } = new();
     public List<WeeklySalesDto> SalesByWeek { get; set; } = new();
+    public List<PaymentMethodStatsDto> SalesByPaymentMethod { get; set; } = new();
+}
+
+public class PaymentMethodStatsDto
+{
+    public string Method { get; set; } = string.Empty;
+    public int Quantity { get; set; }
+    public decimal Revenue { get; set; }
 }
 
 public class ProductStockAlertDto

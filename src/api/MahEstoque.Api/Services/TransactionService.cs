@@ -51,7 +51,9 @@ public class TransactionService : ITransactionService
                 Quantity = t.Quantity,
                 UnitValue = t.UnitValue,
                 TotalValue = t.TotalValue,
-                CreatedAt = t.CreatedAt
+                CreatedAt = t.CreatedAt,
+                PaymentMethod = t.PaymentMethod.HasValue ? t.PaymentMethod.Value.ToString() : null,
+                Installments = t.Installments
             })
             .ToListAsync();
     }
@@ -79,6 +81,10 @@ public class TransactionService : ITransactionService
             throw new InvalidOperationException("Este produto possui variações. Selecione uma variação.");
         }
 
+        Models.PaymentMethod? paymentMethod = null;
+        if (!string.IsNullOrEmpty(request.PaymentMethod))
+            paymentMethod = Enum.Parse<Models.PaymentMethod>(request.PaymentMethod, true);
+
         var transaction = new Transaction
         {
             TenantId = tenantId,
@@ -88,7 +94,9 @@ public class TransactionService : ITransactionService
             Quantity = request.Quantity,
             UnitValue = request.UnitValue,
             TotalValue = totalValue,
-            CreatedAt = request.CreatedAt?.ToUniversalTime() ?? DateTime.UtcNow
+            CreatedAt = request.CreatedAt?.ToUniversalTime() ?? DateTime.UtcNow,
+            PaymentMethod = paymentMethod,
+            Installments = paymentMethod == Models.PaymentMethod.CartaoCredito ? request.Installments : null
         };
 
         if (variant != null)
@@ -149,7 +157,9 @@ public class TransactionService : ITransactionService
             Quantity = transaction.Quantity,
             UnitValue = transaction.UnitValue,
             TotalValue = transaction.TotalValue,
-            CreatedAt = transaction.CreatedAt
+            CreatedAt = transaction.CreatedAt,
+            PaymentMethod = transaction.PaymentMethod?.ToString(),
+            Installments = transaction.Installments
         };
     }
 
@@ -180,6 +190,12 @@ public class TransactionService : ITransactionService
 
         if (request.CreatedAt.HasValue)
             transaction.CreatedAt = request.CreatedAt.Value.ToUniversalTime();
+
+        if (!string.IsNullOrEmpty(request.PaymentMethod))
+        {
+            transaction.PaymentMethod = Enum.Parse<Models.PaymentMethod>(request.PaymentMethod, true);
+            transaction.Installments = transaction.PaymentMethod == Models.PaymentMethod.CartaoCredito ? request.Installments : null;
+        }
 
         // Reverse old effect
         if (variant != null)
@@ -234,7 +250,9 @@ public class TransactionService : ITransactionService
             Quantity = transaction.Quantity,
             UnitValue = transaction.UnitValue,
             TotalValue = transaction.TotalValue,
-            CreatedAt = transaction.CreatedAt
+            CreatedAt = transaction.CreatedAt,
+            PaymentMethod = transaction.PaymentMethod?.ToString(),
+            Installments = transaction.Installments
         };
     }
 

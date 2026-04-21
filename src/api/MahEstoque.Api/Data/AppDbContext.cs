@@ -158,6 +158,7 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Type).HasConversion<string>();
+            entity.Property(e => e.PaymentMethod).HasConversion<string>();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(e => e.Tenant)

@@ -96,6 +96,33 @@
                     <input type="date" id="saleDate">
                 </div>
                 <div class="form-group">
+                    <label for="paymentMethod">Forma de Pagamento</label>
+                    <select id="paymentMethod">
+                        <option value="">Não informado</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Pix">Pix</option>
+                        <option value="CartaoDebito">Cartão de Débito</option>
+                        <option value="CartaoCredito">Cartão de Crédito</option>
+                    </select>
+                </div>
+                <div class="form-group hidden" id="installmentsGroup">
+                    <label for="installments">Parcelas</label>
+                    <select id="installments">
+                        <option value="1">1x (à vista)</option>
+                        <option value="2">2x</option>
+                        <option value="3">3x</option>
+                        <option value="4">4x</option>
+                        <option value="5">5x</option>
+                        <option value="6">6x</option>
+                        <option value="7">7x</option>
+                        <option value="8">8x</option>
+                        <option value="9">9x</option>
+                        <option value="10">10x</option>
+                        <option value="11">11x</option>
+                        <option value="12">12x</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>Total</label>
                     <div id="totalValue" class="stat-value">R$ 0,00</div>
                 </div>
@@ -117,6 +144,7 @@
                             <th>Quantidade</th>
                             <th>Valor Unit.</th>
                             <th>Total</th>
+                            <th>Pagamento</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -152,6 +180,33 @@
                 <div class="form-group">
                     <label for="editDate">Data da Venda</label>
                     <input type="date" id="editDate">
+                </div>
+                <div class="form-group">
+                    <label for="editPaymentMethod">Forma de Pagamento</label>
+                    <select id="editPaymentMethod">
+                        <option value="">Não informado</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Pix">Pix</option>
+                        <option value="CartaoDebito">Cartão de Débito</option>
+                        <option value="CartaoCredito">Cartão de Crédito</option>
+                    </select>
+                </div>
+                <div class="form-group hidden" id="editInstallmentsGroup">
+                    <label for="editInstallments">Parcelas</label>
+                    <select id="editInstallments">
+                        <option value="1">1x (à vista)</option>
+                        <option value="2">2x</option>
+                        <option value="3">3x</option>
+                        <option value="4">4x</option>
+                        <option value="5">5x</option>
+                        <option value="6">6x</option>
+                        <option value="7">7x</option>
+                        <option value="8">8x</option>
+                        <option value="9">9x</option>
+                        <option value="10">10x</option>
+                        <option value="11">11x</option>
+                        <option value="12">12x</option>
+                    </select>
                 </div>
                 <div id="editError" class="alert alert-danger hidden"></div>
                 <div class="modal-actions">
@@ -190,6 +245,21 @@
         if (!checkRole(['Admin'])) {
             document.getElementById('usersLink').style.display = 'none';
             document.getElementById('configLink').style.display = 'none';
+        }
+
+        const PAYMENT_LABELS = {
+            'Dinheiro': 'Dinheiro',
+            'Pix': 'Pix',
+            'CartaoDebito': 'Cartão de Débito',
+            'CartaoCredito': 'Cartão de Crédito'
+        };
+
+        function formatPaymentMethod(method, installments) {
+            if (!method) return '-';
+            const label = PAYMENT_LABELS[method] || method;
+            if (method === 'CartaoCredito' && installments && installments > 1)
+                return `${label} ${installments}x`;
+            return label;
         }
 
         let products = [];
@@ -297,6 +367,7 @@
                     } else if (s.productSize) {
                         variantLabel = s.productSize;
                     }
+                    const paymentLabel = formatPaymentMethod(s.paymentMethod, s.installments);
                     return `
                     <tr>
                         <td>${formatDate(s.createdAt)}</td>
@@ -305,6 +376,7 @@
                         <td>${s.quantity}</td>
                         <td>${formatCurrency(s.unitValue)}</td>
                         <td>${formatCurrency(s.totalValue)}</td>
+                        <td>${paymentLabel}</td>
                         <td class="actions">
                             <button class="btn btn-sm btn-secondary" onclick="editTransaction('${s.id}')">Editar</button>
                         </td>
@@ -341,6 +413,26 @@
             document.getElementById('quantity').max = stock;
         });
 
+        document.getElementById('paymentMethod').addEventListener('change', (e) => {
+            const group = document.getElementById('installmentsGroup');
+            if (e.target.value === 'CartaoCredito') {
+                group.classList.remove('hidden');
+            } else {
+                group.classList.add('hidden');
+                document.getElementById('installments').value = '1';
+            }
+        });
+
+        document.getElementById('editPaymentMethod').addEventListener('change', (e) => {
+            const group = document.getElementById('editInstallmentsGroup');
+            if (e.target.value === 'CartaoCredito') {
+                group.classList.remove('hidden');
+            } else {
+                group.classList.add('hidden');
+                document.getElementById('editInstallments').value = '1';
+            }
+        });
+
         document.getElementById('quantity').addEventListener('input', calculateTotal);
         document.getElementById('unitValue').addEventListener('input', calculateTotal);
 
@@ -369,12 +461,17 @@
             const unitValue = parseFloat(document.getElementById('unitValue').value);
             const saleDateInput = document.getElementById('saleDate').value;
 
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const installments = parseInt(document.getElementById('installments').value);
+
             const data = { productId, type: 'Sale', quantity, unitValue };
             if (variantId) data.variantId = variantId;
             if (saleDateInput) {
-                const date = new Date(saleDateInput);
-                date.setHours(12, 0, 0, 0);
-                data.createdAt = date.toISOString();
+                data.createdAt = new Date(saleDateInput + 'T12:00:00').toISOString();
+            }
+            if (paymentMethod) {
+                data.paymentMethod = paymentMethod;
+                if (paymentMethod === 'CartaoCredito') data.installments = installments;
             }
 
             try {
@@ -391,6 +488,7 @@
                 document.getElementById('variantSelect').required = false;
                 document.getElementById('currentStock').textContent = '-';
                 document.getElementById('totalValue').textContent = 'R$ 0,00';
+                document.getElementById('installmentsGroup').classList.add('hidden');
 
                 loadProducts();
                 loadSales();
@@ -421,8 +519,22 @@
                 document.getElementById('editUnitValue').value = sale.unitValue;
 
                 const date = new Date(sale.createdAt);
-                date.setHours(date.getHours() + 3);
-                document.getElementById('editDate').value = date.toISOString().split('T')[0];
+                document.getElementById('editDate').value = [
+                    date.getFullYear(),
+                    String(date.getMonth() + 1).padStart(2, '0'),
+                    String(date.getDate()).padStart(2, '0')
+                ].join('-');
+
+                const editPayment = document.getElementById('editPaymentMethod');
+                editPayment.value = sale.paymentMethod || '';
+                const editInstGroup = document.getElementById('editInstallmentsGroup');
+                if (sale.paymentMethod === 'CartaoCredito') {
+                    editInstGroup.classList.remove('hidden');
+                    document.getElementById('editInstallments').value = sale.installments || 1;
+                } else {
+                    editInstGroup.classList.add('hidden');
+                    document.getElementById('editInstallments').value = '1';
+                }
 
                 document.getElementById('editError').classList.add('hidden');
                 document.getElementById('editModal').classList.add('active');
@@ -444,13 +556,15 @@
             const quantity = parseInt(document.getElementById('editQuantity').value);
             const unitValue = parseFloat(document.getElementById('editUnitValue').value);
             const dateInput = document.getElementById('editDate').value;
+            const paymentMethod = document.getElementById('editPaymentMethod').value;
+            const installments = parseInt(document.getElementById('editInstallments').value);
 
             const data = { quantity, unitValue };
             if (dateInput) {
-                const date = new Date(dateInput);
-                date.setHours(12, 0, 0, 0);
-                data.createdAt = date.toISOString();
+                data.createdAt = new Date(dateInput + 'T12:00:00').toISOString();
             }
+            data.paymentMethod = paymentMethod || null;
+            if (paymentMethod === 'CartaoCredito') data.installments = installments;
 
             try {
                 await request(`/transactions/${id}`, {

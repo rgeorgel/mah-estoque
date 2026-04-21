@@ -90,6 +90,8 @@
                                     <th>Quantidade</th>
                                     <th>Valor Unit.</th>
                                     <th>Total</th>
+                                    <th>Pagamento</th>
+                                    <th>Parcelas</th>
                                 </tr>
                             </thead>
                             <tbody id="salesTable"></tbody>
@@ -204,6 +206,21 @@
             });
         });
 
+        const PAYMENT_LABELS = {
+            'Dinheiro': 'Dinheiro',
+            'Pix': 'Pix',
+            'CartaoDebito': 'Cartão de Débito',
+            'CartaoCredito': 'Cartão de Crédito'
+        };
+
+        function formatPaymentMethod(method, installments) {
+            if (!method) return '-';
+            const label = PAYMENT_LABELS[method] || method;
+            if (method === 'CartaoCredito' && installments && installments > 1)
+                return `${label} ${installments}x`;
+            return label;
+        }
+
         let salesChart = null;
         let categoryChart = null;
         let sizeChart = null;
@@ -275,11 +292,13 @@
                     <tr>
                         <td>${formatDate(t.createdAt)}</td>
                         <td>${t.productName}</td>
-                        <td>${t.productSKU}</td>
+                        <td>${t.productSKU || '-'}</td>
                         <td>${t.productSize || '-'}</td>
                         <td>${t.quantity}</td>
                         <td>${formatCurrency(t.unitValue)}</td>
                         <td>${formatCurrency(t.totalValue)}</td>
+                        <td>${formatPaymentMethod(t.paymentMethod, t.installments)}</td>
+                        <td>${t.paymentMethod === 'CartaoCredito' && t.installments ? t.installments + 'x' : '-'}</td>
                     </tr>
                 `).join('');
             }
@@ -442,9 +461,17 @@
             });
         }
 
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('periodStart').value = today;
-        document.getElementById('periodEnd').value = today;
+        function toLocalDateStr(d) {
+            return [
+                d.getFullYear(),
+                String(d.getMonth() + 1).padStart(2, '0'),
+                String(d.getDate()).padStart(2, '0')
+            ].join('-');
+        }
+
+        const _now = new Date();
+        document.getElementById('periodStart').value = toLocalDateStr(new Date(_now.getFullYear(), _now.getMonth(), 1));
+        document.getElementById('periodEnd').value = toLocalDateStr(new Date(_now.getFullYear(), _now.getMonth() + 1, 0));
 
         loadAllReports();
     </script>

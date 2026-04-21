@@ -10,6 +10,14 @@ public enum TransactionType
     Adjustment
 }
 
+public enum PaymentMethod
+{
+    Dinheiro,
+    Pix,
+    CartaoDebito,
+    CartaoCredito
+}
+
 public class Transaction
 {
     [Key]
@@ -43,4 +51,8 @@ public class Transaction
     public decimal TotalValue { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public PaymentMethod? PaymentMethod { get; set; }
+
+    public int? Installments { get; set; }
 }
