@@ -764,8 +764,9 @@
         products.forEach(p => {
             if (p.variants?.length && !selectedVariants[p.id]) {
                 selectedVariants[p.id] = {};
-                const sizes  = [...new Set(p.variants.filter(v => v.size).map(v => v.size))];
-                const colors = [...new Set(p.variants.filter(v => v.color).map(v => v.color))];
+                const inStock = v => v.quantity > 0;
+                const sizes  = [...new Set(p.variants.filter(v => v.size && inStock(v)).map(v => v.size))];
+                const colors = [...new Set(p.variants.filter(v => v.color && inStock(v)).map(v => v.color))];
                 if (sizes.length)  selectedVariants[p.id].size  = sizes[0];
                 if (colors.length) selectedVariants[p.id].color = colors[0];
             }
@@ -833,19 +834,28 @@
 
     function renderVariantSelector(p) {
         const sel    = selectedVariants[p.id] || {};
-        const sizes  = [...new Set(p.variants.filter(v => v.size).map(v => v.size))];
-        const colors = [...new Set(p.variants.filter(v => v.color).map(v => v.color))];
+        const inStock = v => v.quantity > 0;
+        const sizes  = [...new Set(p.variants.filter(v => v.size && inStock(v)).map(v => v.size))];
+        const colors = [...new Set(p.variants.filter(v => v.color && inStock(v)).map(v => v.color))];
+        const selSize = sel.size && sizes.includes(sel.size) ? sel.size : null;
+        const selColor = sel.color && colors.includes(sel.color) ? sel.color : null;
         let html = '<div class="variant-selectors">';
         if (sizes.length > 0) {
             html += `<div class="variant-label">Tamanho</div>
             <div class="variant-options" data-product="${p.id}" data-type="size">
-                ${sizes.map(s => `<span class="variant-opt${sel.size === s ? ' selected' : ''}" onclick="selectVariant('${p.id}','size','${escAttr(s)}')" data-val="${escAttr(s)}">${escHtml(s)}</span>`).join('')}
+                ${sizes.map(s => {
+                    const available = p.variants.some(v => v.size === s && v.color === selColor && inStock(v));
+                    return `<span class="variant-opt${selSize === s ? ' selected' : ''}${!available ? ' unavailable' : ''}" onclick="selectVariant('${p.id}','size','${escAttr(s)}')" data-val="${escAttr(s)}">${escHtml(s)}</span>`;
+                }).join('')}
             </div>`;
         }
         if (colors.length > 0) {
             html += `<div class="variant-label" style="margin-top:8px">Cor</div>
             <div class="variant-options" data-product="${p.id}" data-type="color">
-                ${colors.map(c => `<span class="variant-opt${sel.color === c ? ' selected' : ''}" onclick="selectVariant('${p.id}','color','${escAttr(c)}')" data-val="${escAttr(c)}">${escHtml(c)}</span>`).join('')}
+                ${colors.map(c => {
+                    const available = p.variants.some(v => v.color === c && v.size === selSize && inStock(v));
+                    return `<span class="variant-opt${selColor === c ? ' selected' : ''}${!available ? ' unavailable' : ''}" onclick="selectVariant('${p.id}','color','${escAttr(c)}')" data-val="${escAttr(c)}">${escHtml(c)}</span>`;
+                }).join('')}
             </div>`;
         }
         html += '</div>';
@@ -965,23 +975,28 @@
         if (!selectedVariants[productId]) selectedVariants[productId] = {};
         selectedVariants[productId][type] = value;
 
-        // Update UI
         const container = document.querySelector(`.variant-options[data-product="${productId}"][data-type="${type}"]`);
         if (container) {
             container.querySelectorAll('.variant-opt').forEach(el => {
                 el.classList.toggle('selected', el.dataset.val === value);
             });
         }
+
+        const card = document.getElementById(`card-${productId}`);
+        if (card) {
+            const varDiv = card.querySelector('.variant-selectors');
+            const product = catalogData.products.find(p => p.id === productId);
+            if (varDiv && product) varDiv.outerHTML = renderVariantSelector(product);
+        }
     }
 
     function resolveVariant(product) {
         if (!product.variants?.length) return null;
         const sel = selectedVariants[product.id] || {};
-        // Find best matching variant
         return product.variants.find(v => {
             const sizeOk = !v.size || v.size === sel.size;
             const colorOk = !v.color || v.color === sel.color;
-            return sizeOk && colorOk;
+            return sizeOk && colorOk && v.quantity > 0;
         }) || null;
     }
 
